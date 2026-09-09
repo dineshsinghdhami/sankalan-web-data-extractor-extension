@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "Sankalan",
+  "version": "0.1.0",
+  "description": "Extract raw data from webpages and export it for analysis.",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "downloads"
+  ],
+  "action": {
+    "default_title": "Sankalan",
+    "default_popup": "popup.html"
+  }
+}

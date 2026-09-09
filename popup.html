@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Sankalan</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+
+  <div class="app">
+
+    <header class="topbar">
+
+      <div class="brand">
+
+        <div class="brand-mark">
+          S
+        </div>
+
+        <div class="brand-text">
+
+          <h1>Sankalan</h1>
+
+          <p>
+            Raw web data extraction
+          </p>
+
+        </div>
+
+      </div>
+
+      <div class="version">
+        v0.1
+      </div>
+
+    </header>
+
+
+    <main class="content">
+
+      <section class="hero-card">
+
+        <div class="hero-text">
+
+          <span class="eyebrow">
+            CURRENT PAGE
+          </span>
+
+          <h2>
+            Extract webpage data
+          </h2>
+
+          <p>
+            Scan the current webpage for tables, products,
+            listings, cards, and other repeated data.
+          </p>
+
+        </div>
+
+        <button id="scanBtn" class="primary-btn">
+
+          <span id="scanBtnText">
+            Scan Current Page
+          </span>
+
+          <span id="scanSpinner" class="spinner hidden"></span>
+
+        </button>
+
+      </section>
+
+
+      <section id="statusBox" class="status-box hidden">
+
+        <div id="statusIcon" class="status-icon">
+          i
+        </div>
+
+        <div class="status-content">
+
+          <strong id="statusTitle">
+            Status
+          </strong>
+
+          <span id="statusMessage">
+            Waiting
+          </span>
+
+        </div>
+
+      </section>
+
+
+      <section id="overviewSection" class="section hidden">
+
+        <div class="section-heading">
+
+          <div>
+
+            <span class="eyebrow">
+              PAGE OVERVIEW
+            </span>
+
+            <h3>
+              Detected elements
+            </h3>
+
+          </div>
+
+        </div>
+
+
+        <div class="stats-grid">
+
+          <div class="stat-card">
+
+            <span class="stat-label">
+              Tables
+            </span>
+
+            <strong id="tableCount" class="stat-value">
+              0
+            </strong>
+
+          </div>
+
+
+          <div class="stat-card">
+
+            <span class="stat-label">
+              Groups
+            </span>
+
+            <strong id="groupCount" class="stat-value">
+              0
+            </strong>
+
+          </div>
+
+
+          <div class="stat-card">
+
+            <span class="stat-label">
+              Links
+            </span>
+
+            <strong id="linkCount" class="stat-value">
+              0
+            </strong>
+
+          </div>
+
+
+          <div class="stat-card">
+
+            <span class="stat-label">
+              Images
+            </span>
+
+            <strong id="imageCount" class="stat-value">
+              0
+            </strong>
+
+          </div>
+
+
+          <div class="stat-card">
+
+            <span class="stat-label">
+              Lists
+            </span>
+
+            <strong id="listCount" class="stat-value">
+              0
+            </strong>
+
+          </div>
+
+        </div>
+
+      </section>
+
+
+      <section
+        id="dataSourceSection"
+        class="section hidden"
+      >
+
+        <div class="section-heading">
+
+          <div>
+
+            <span class="eyebrow">
+              DATA SOURCE
+            </span>
+
+            <h3>
+              Choose extraction type
+            </h3>
+
+          </div>
+
+        </div>
+
+
+        <div class="source-tabs">
+
+          <button
+            id="tableTab"
+            class="source-tab active"
+          >
+            Tables
+          </button>
+
+          <button
+            id="groupTab"
+            class="source-tab"
+          >
+            Repeated Items
+          </button>
+
+        </div>
+
+
+        <div
+          id="tablePanel"
+          class="source-panel"
+        >
+
+          <label
+            class="field-label"
+            for="tableSelect"
+          >
+            Choose a table
+          </label>
+
+          <select
+            id="tableSelect"
+            class="select-input"
+          ></select>
+
+
+          <button
+            id="extractTableBtn"
+            class="secondary-btn"
+          >
+
+            <span id="extractTableBtnText">
+              Extract Raw Table
+            </span>
+
+            <span
+              id="extractTableSpinner"
+              class="spinner dark-spinner hidden"
+            ></span>
+
+          </button>
+
+        </div>
+
+
+        <div
+          id="groupPanel"
+          class="source-panel hidden"
+        >
+
+          <label
+            class="field-label"
+            for="groupSelect"
+          >
+            Choose a repeated group
+          </label>
+
+          <select
+            id="groupSelect"
+            class="select-input"
+          ></select>
+
+
+          <div class="group-hint">
+
+            <strong id="groupHintTitle">
+              Repeated webpage items
+            </strong>
+
+            <span id="groupHintText">
+              Sankalan looks for repeated products, cards,
+              listings, and content blocks.
+            </span>
+
+          </div>
+
+
+          <button
+            id="extractGroupBtn"
+            class="secondary-btn"
+          >
+
+            <span id="extractGroupBtnText">
+              Extract Item Fields
+            </span>
+
+            <span
+              id="extractGroupSpinner"
+              class="spinner dark-spinner hidden"
+            ></span>
+
+          </button>
+
+        </div>
+
+      </section>
+
+
+      <section id="previewSection" class="section hidden">
+
+        <div class="section-heading preview-heading">
+
+          <div>
+
+            <span id="previewEyebrow" class="eyebrow">
+              DATA PREVIEW
+            </span>
+
+            <h3 id="previewTitle">
+              Extracted data
+            </h3>
+
+          </div>
+
+
+          <div class="row-badge">
+
+            <span id="rowCount">
+              0
+            </span>
+
+            rows
+
+          </div>
+
+        </div>
+
+
+        <div class="preview-wrapper">
+
+          <div
+            id="previewEmpty"
+            class="preview-empty"
+          >
+            No data extracted yet.
+          </div>
+
+          <div id="previewTableContainer"></div>
+
+        </div>
+
+
+        <p class="preview-note">
+          Preview shows the first 15 rows. Export files contain
+          the complete extracted dataset.
+        </p>
+
+      </section>
+
+
+      <section id="exportSection" class="section hidden">
+
+        <div class="section-heading">
+
+          <div>
+
+            <span class="eyebrow">
+              EXPORT DATA
+            </span>
+
+            <h3>
+              Choose a format
+            </h3>
+
+          </div>
+
+        </div>
+
+
+        <p class="export-description">
+          Export the extracted data without deduplication
+          or analytical preprocessing.
+        </p>
+
+
+        <div class="export-grid">
+
+          <button
+            id="csvBtn"
+            class="export-card"
+          >
+
+            <span class="export-type">
+              CSV
+            </span>
+
+            <span class="export-name">
+              Data rows
+            </span>
+
+            <span class="export-extension">
+              .csv
+            </span>
+
+          </button>
+
+
+          <button
+            id="jsonBtn"
+            class="export-card"
+          >
+
+            <span class="export-type">
+              JSON
+            </span>
+
+            <span class="export-name">
+              Raw arrays
+            </span>
+
+            <span class="export-extension">
+              .json
+            </span>
+
+          </button>
+
+
+          <button
+            id="excelBtn"
+            class="export-card"
+          >
+
+            <span class="export-type">
+              Excel
+            </span>
+
+            <span class="export-name">
+              Spreadsheet
+            </span>
+
+            <span class="export-extension">
+              .xls
+            </span>
+
+          </button>
+
+        </div>
+
+
+        <div
+          id="exportProgress"
+          class="export-progress hidden"
+        >
+
+          <span class="mini-spinner"></span>
+
+          <span id="exportProgressText">
+            Preparing file...
+          </span>
+
+        </div>
+
+      </section>
+
+    </main>
+
+
+    <footer class="footer">
+
+      <span>
+        Sankalan
+      </span>
+
+      <span>
+        Collect first. Analyze later.
+      </span>
+
+    </footer>
+
+  </div>
+
+
+  <script src="popup.js"></script>
+
+</body>
+</html>

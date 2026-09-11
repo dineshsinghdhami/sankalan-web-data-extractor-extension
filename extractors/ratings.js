@@ -5,123 +5,87 @@
 
 
   globalThis.Sankalan.ratingExtractor = {
-
-    extract:
-      extractRatingData
-
+    extract: extractRatingData
   };
 
 
-  function extractRatingData(
-    item
-  ) {
+  function extractRatingData(item) {
 
     if (!item) {
 
       return {
         rating: "",
-        reviews: ""
+        reviews: "",
+        scale: ""
       };
 
     }
 
 
-    /*
-      Detection order matters.
+    const detectors = [
 
-      Prefer explicit/structured values
-      before trying visual inference.
-    */
+      detectStructuredRating,
+      detectRatingAttributes,
+      detectClassRating,
+      detectTextRating,
+      detectUnicodeStars,
+      detectCssRating
 
-    const structured =
-      detectStructuredRating(
-        item
-      );
-
-
-    const attributes =
-      detectAttributeRating(
-        item
-      );
+    ];
 
 
-    const numeric =
-      detectNumericRating(
-        item
-      );
+    let detected = null;
 
 
-    const unicode =
-      detectUnicodeStars(
-        item
-      );
+    for (
+      const detector
+      of detectors
+    ) {
+
+      detected =
+        detector(item);
 
 
-    const classBased =
-      detectClassBasedRating(
-        item
-      );
+      if (
+        detected &&
+        detected.rating !== ""
+      ) {
+        break;
+      }
 
-
-    const cssOverlay =
-      detectCssOverlayRating(
-        item
-      );
-
-
-    const iconBased =
-      detectIconRating(
-        item
-      );
-
-
-    const rating =
-      firstValidRating([
-
-        structured.rating,
-        attributes,
-        numeric,
-        unicode,
-        classBased,
-        cssOverlay,
-        iconBased
-
-      ]);
-
-
-    const reviews =
-      structured.reviews !== ""
-        ? structured.reviews
-        : detectReviewCount(
-            item
-          );
+    }
 
 
     return {
 
       rating:
-        rating,
+        detected?.rating ||
+        "",
 
       reviews:
-        reviews
+        detectReviewCount(item),
+
+      scale:
+        detected?.scale ||
+        ""
 
     };
 
   }
 
 
+  /*
+    ==================================================
+    STRUCTURED DATA
+    ==================================================
+  */
+
+
   function detectStructuredRating(
     item
   ) {
 
-    let rating =
-      "";
-
-    let reviews =
-      "";
-
-
-    const ratingElements =
+    const elements =
       item.querySelectorAll(
         "[itemprop='ratingValue']"
       );
@@ -129,309 +93,114 @@
 
     for (
       const element
-      of ratingElements
+      of elements
     ) {
 
       const value =
-        element.getAttribute(
-          "content"
-        ) ||
-        element.getAttribute(
-          "value"
-        ) ||
-        element.innerText ||
-        element.textContent;
-
-
-      rating =
-        validateRating(
-          extractNumber(
-            value
-          )
-        );
-
-
-      if (
-        rating !== ""
-      ) {
-
-        break;
-
-      }
-
-    }
-
-
-    const reviewElements =
-      item.querySelectorAll(
-        "[itemprop='reviewCount'], [itemprop='ratingCount']"
-      );
-
-
-    for (
-      const element
-      of reviewElements
-    ) {
-
-      reviews =
-        extractWholeNumber(
+        firstNumber(
           element.getAttribute(
             "content"
           ) ||
           element.getAttribute(
             "value"
           ) ||
-          element.innerText ||
           element.textContent
         );
 
 
       if (
-        reviews !== ""
+        !Number.isFinite(value)
       ) {
-
-        break;
-
+        continue;
       }
 
-    }
+
+      const container =
+        element.closest(
+          "[itemprop='aggregateRating'], [itemprop='reviewRating']"
+        );
 
 
-    if (
-      rating !== "" ||
-      reviews !== ""
-    ) {
-
-      return {
-
-        rating:
-          rating,
-
-        reviews:
-          reviews
-
-      };
-
-    }
+      let bestRating =
+        NaN;
 
 
-    const scripts =
-      item.querySelectorAll(
-        "script[type='application/ld+json']"
-      );
+      if (container) {
 
-
-    for (
-      const script
-      of scripts
-    ) {
-
-      try {
-
-        const parsed =
-          JSON.parse(
-            script.textContent
+        const best =
+          container.querySelector(
+            "[itemprop='bestRating']"
           );
 
 
-        const result =
-          searchJsonLd(
-            parsed
-          );
+        if (best) {
 
-
-        if (
-          result.rating !== "" ||
-          result.reviews !== ""
-        ) {
-
-          return result;
-
-        }
-
-      } catch (error) {
-
-      }
-
-    }
-
-
-    return {
-
-      rating: "",
-      reviews: ""
-
-    };
-
-  }
-
-
-  function searchJsonLd(
-    value
-  ) {
-
-    if (!value) {
-
-      return {
-
-        rating: "",
-        reviews: ""
-
-      };
-
-    }
-
-
-    if (
-      Array.isArray(
-        value
-      )
-    ) {
-
-      for (
-        const entry
-        of value
-      ) {
-
-        const result =
-          searchJsonLd(
-            entry
-          );
-
-
-        if (
-          result.rating !== "" ||
-          result.reviews !== ""
-        ) {
-
-          return result;
+          bestRating =
+            firstNumber(
+              best.getAttribute(
+                "content"
+              ) ||
+              best.textContent
+            );
 
         }
 
       }
 
-
-      return {
-
-        rating: "",
-        reviews: ""
-
-      };
-
-    }
-
-
-    if (
-      typeof value !==
-      "object"
-    ) {
-
-      return {
-
-        rating: "",
-        reviews: ""
-
-      };
-
-    }
-
-
-    if (
-      value.aggregateRating
-    ) {
-
-      const aggregate =
-        value.aggregateRating;
-
-
-      return {
-
-        rating:
-          validateRating(
-            extractNumber(
-              aggregate.ratingValue
-            )
-          ),
-
-        reviews:
-          extractWholeNumber(
-            aggregate.reviewCount ||
-            aggregate.ratingCount
-          )
-
-      };
-
-    }
-
-
-    if (
-      value.ratingValue
-    ) {
-
-      return {
-
-        rating:
-          validateRating(
-            extractNumber(
-              value.ratingValue
-            )
-          ),
-
-        reviews:
-          extractWholeNumber(
-            value.reviewCount ||
-            value.ratingCount
-          )
-
-      };
-
-    }
-
-
-    for (
-      const key
-      of Object.keys(
-        value
-      )
-    ) {
 
       if (
-        value[key] &&
-        typeof value[key] ===
-          "object"
+        Number.isFinite(bestRating) &&
+        bestRating > 0
       ) {
 
-        const result =
-          searchJsonLd(
-            value[key]
-          );
+        return makeRating(
+          value,
+          bestRating
+        );
+
+      }
 
 
-        if (
-          result.rating !== "" ||
-          result.reviews !== ""
-        ) {
+      /*
+        Structured rating values greater
+        than five are commonly 10-point
+        scores.
 
-          return result;
+        We only allow this because the
+        element explicitly declares itself
+        as ratingValue.
+      */
 
-        }
+      if (
+        value >= 0 &&
+        value <= 10
+      ) {
+
+        return makeRating(
+          value,
+          value > 5
+            ? 10
+            : 5
+        );
 
       }
 
     }
 
 
-    return {
-
-      rating: "",
-      reviews: ""
-
-    };
+    return null;
 
   }
 
 
-  function detectAttributeRating(
+  /*
+    ==================================================
+    DATA / ARIA ATTRIBUTES
+    ==================================================
+  */
+
+
+  function detectRatingAttributes(
     item
   ) {
 
@@ -446,16 +215,13 @@
     ];
 
 
-    const ratingAttributes = [
+    const numericAttributes = [
 
       "data-rating",
+      "data-rating-value",
       "data-score",
       "data-stars",
-      "data-star-rating",
-      "data-rating-value",
-      "aria-valuenow",
-      "aria-label",
-      "title"
+      "data-star-rating"
 
     ];
 
@@ -465,88 +231,154 @@
       of elements
     ) {
 
+      const descriptor =
+        getDescriptor(
+          element
+        );
+
+
+      if (
+        !hasRatingSemantics(
+          descriptor
+        )
+      ) {
+        continue;
+      }
+
+
       for (
         const attribute
-        of ratingAttributes
+        of numericAttributes
       ) {
 
-        const value =
+        const raw =
           element.getAttribute(
             attribute
           );
 
 
         if (
-          value === null ||
-          value === ""
+          raw === null ||
+          raw === ""
         ) {
-
           continue;
-
         }
 
 
-        /*
-          aria-valuenow can contain a
-          clean number without "rating"
-          wording.
+        const number =
+          firstNumber(raw);
 
-          Only use it if the element itself
-          looks rating-related.
-        */
 
-        if (
-          attribute ===
+        const result =
+          validateSemanticRating(
+            number,
+            raw +
+            " " +
+            descriptor
+          );
+
+
+        if (result) {
+          return result;
+        }
+
+      }
+
+
+      const ariaValue =
+        element.getAttribute(
           "aria-valuenow"
-        ) {
-
-          const descriptor =
-            buildElementDescriptor(
-              element
-            );
+        );
 
 
-          if (
-            !/rating|star|score/i
-              .test(
-                descriptor
-              )
-          ) {
+      if (ariaValue) {
 
-            continue;
-
-          }
+        const ariaMax =
+          firstNumber(
+            element.getAttribute(
+              "aria-valuemax"
+            )
+          );
 
 
-          const rating =
-            validateRating(
-              value
-            );
-
-
-          if (
-            rating !== ""
-          ) {
-
-            return rating;
-
-          }
-
-        }
-
-
-        const rating =
-          extractRatingFromText(
-            value
+        const number =
+          firstNumber(
+            ariaValue
           );
 
 
         if (
-          rating !== ""
+          Number.isFinite(
+            ariaMax
+          ) &&
+          ariaMax > 0
         ) {
 
-          return rating;
+          const result =
+            makeRating(
+              number,
+              ariaMax
+            );
 
+
+          if (result) {
+            return result;
+          }
+
+        }
+
+
+        const result =
+          validateSemanticRating(
+            number,
+            descriptor
+          );
+
+
+        if (result) {
+          return result;
+        }
+
+      }
+
+
+      const label =
+        element.getAttribute(
+          "aria-label"
+        );
+
+
+      if (label) {
+
+        const result =
+          ratingFromText(
+            label
+          );
+
+
+        if (result) {
+          return result;
+        }
+
+      }
+
+
+      const title =
+        element.getAttribute(
+          "title"
+        );
+
+
+      if (title) {
+
+        const result =
+          ratingFromText(
+            title
+          );
+
+
+        if (result) {
+          return result;
         }
 
       }
@@ -554,12 +386,19 @@
     }
 
 
-    return "";
+    return null;
 
   }
 
 
-  function detectNumericRating(
+  /*
+    ==================================================
+    CLASS RATINGS
+    ==================================================
+  */
+
+
+  function detectClassRating(
     item
   ) {
 
@@ -574,208 +413,7 @@
     ];
 
 
-    for (
-      const element
-      of elements
-    ) {
-
-      const text =
-        (
-          element.innerText ||
-          element.textContent ||
-          ""
-        ).trim();
-
-
-      if (
-        text === "" ||
-        text.length > 150
-      ) {
-
-        continue;
-
-      }
-
-
-      const rating =
-        extractRatingFromText(
-          text
-        );
-
-
-      if (
-        rating !== ""
-      ) {
-
-        return rating;
-
-      }
-
-    }
-
-
-    return "";
-
-  }
-
-
-  function extractRatingFromText(
-    value
-  ) {
-
-    if (
-      value === null ||
-      value === undefined
-    ) {
-
-      return "";
-
-    }
-
-
-    const text =
-      String(
-        value
-      ).trim();
-
-
-    const patterns = [
-
-      /(?:rating|rated|score)\s*[:\-]?\s*([0-5](?:\.\d+)?)/i,
-
-      /([0-5](?:\.\d+)?)\s*\/\s*5/i,
-
-      /([0-5](?:\.\d+)?)\s*(?:out\s+of)\s*5/i,
-
-      /([0-5](?:\.\d+)?)\s*stars?\b/i,
-
-      /([0-5](?:\.\d+)?)\s*★/i
-
-    ];
-
-
-    for (
-      const pattern
-      of patterns
-    ) {
-
-      const match =
-        text.match(
-          pattern
-        );
-
-
-      if (
-        match
-      ) {
-
-        return validateRating(
-          match[1]
-        );
-
-      }
-
-    }
-
-
-    return "";
-
-  }
-
-
-  function detectUnicodeStars(
-    item
-  ) {
-
-    const elements = [
-
-      item,
-
-      ...item.querySelectorAll(
-        "*"
-      )
-
-    ];
-
-
-    for (
-      const element
-      of elements
-    ) {
-
-      const text =
-        (
-          element.textContent ||
-          ""
-        ).trim();
-
-
-      const match =
-        text.match(
-          /[★☆]{3,5}/
-        );
-
-
-      if (
-        !match
-      ) {
-
-        continue;
-
-      }
-
-
-      const sequence =
-        match[0];
-
-
-      const filled =
-        (
-          sequence.match(
-            /★/g
-          ) ||
-          []
-        ).length;
-
-
-      const empty =
-        (
-          sequence.match(
-            /☆/g
-          ) ||
-          []
-        ).length;
-
-
-      const total =
-        filled +
-        empty;
-
-
-      if (
-        total >= 3 &&
-        total <= 5
-      ) {
-
-        return validateRating(
-          filled
-        );
-
-      }
-
-    }
-
-
-    return "";
-
-  }
-
-
-  function detectClassBasedRating(
-    item
-  ) {
-
-    const wordValues = {
+    const words = {
 
       zero: 0,
       one: 1,
@@ -787,12 +425,166 @@
     };
 
 
+    for (
+      const element
+      of elements
+    ) {
+
+      const classes =
+        Array.from(
+          element.classList ||
+          []
+        );
+
+
+      if (
+        classes.length === 0
+      ) {
+        continue;
+      }
+
+
+      const combined =
+        classes
+          .join(" ")
+          .toLowerCase();
+
+
+      if (
+        !hasRatingSemantics(
+          combined
+        )
+      ) {
+        continue;
+      }
+
+
+      /*
+        Books to Scrape:
+
+        star-rating Three
+      */
+
+      for (
+        const className
+        of classes
+      ) {
+
+        const token =
+          className
+            .trim()
+            .toLowerCase();
+
+
+        if (
+          Object.prototype
+            .hasOwnProperty
+            .call(
+              words,
+              token
+            )
+        ) {
+
+          return makeRating(
+            words[token],
+            5
+          );
+
+        }
+
+      }
+
+
+      for (
+        const [word, value]
+        of Object.entries(
+          words
+        )
+      ) {
+
+        const pattern =
+          new RegExp(
+            "(?:rating|rate|stars?|score)[-_ ]+" +
+            word +
+            "(?:$|[\\s_-])",
+            "i"
+          );
+
+
+        if (
+          pattern.test(
+            combined
+          )
+        ) {
+
+          return makeRating(
+            value,
+            5
+          );
+
+        }
+
+      }
+
+
+      /*
+        rating-4
+        rating-4.5
+        score-9.3
+      */
+
+      const match =
+        combined.match(
+          /(?:rating|rate|stars?|score)[-_ ]+([0-9]+(?:\.[0-9]+)?)(?:$|[\s_-])/i
+        );
+
+
+      if (match) {
+
+        const number =
+          Number(
+            match[1]
+          );
+
+
+        const result =
+          validateSemanticRating(
+            number,
+            combined
+          );
+
+
+        if (result) {
+          return result;
+        }
+
+      }
+
+    }
+
+
+    return null;
+
+  }
+
+
+  /*
+    ==================================================
+    TEXT RATINGS
+    ==================================================
+  */
+
+
+  function detectTextRating(
+    item
+  ) {
+
     const elements = [
 
       item,
 
       ...item.querySelectorAll(
-        "*"
+        "span, p, div, small, strong"
       )
 
     ];
@@ -803,153 +595,328 @@
       of elements
     ) {
 
-      const className =
-        getClassName(
-          element
-        )
-          .toLowerCase()
-          .trim();
+      const text =
+        normalize(
+          element.textContent
+        );
 
 
       if (
-        className === "" ||
-        !/star|rating|score/i
-          .test(
-            className
-          )
+        !text ||
+        text.length > 150
       ) {
-
         continue;
-
       }
+
+
+      const descriptor =
+        getDescriptor(
+          element
+        );
 
 
       /*
-        Books to Scrape:
+        A bare number such as 9.3 is only
+        treated as a rating if the surrounding
+        DOM has rating/score semantics.
+      */
 
-        star-rating Three
-    */
-
-      for (
-        const [
-          word,
-          number
-        ]
-        of Object.entries(
-          wordValues
+      if (
+        /^[0-9]+(?:\.[0-9]+)?$/
+          .test(text) &&
+        hasRatingSemantics(
+          descriptor
         )
       ) {
 
-        const wordPattern =
-          new RegExp(
-            "(?:^|[\\s_-])" +
-            word +
-            "(?:$|[\\s_-])",
-            "i"
+        const number =
+          Number(text);
+
+
+        const result =
+          validateSemanticRating(
+            number,
+            descriptor
           );
 
 
-        if (
-          wordPattern.test(
-            className
-          )
-        ) {
-
-          /*
-            Zero from a class is only trusted
-            when zero is explicitly written.
-        */
-
-          return String(
-            number
-          );
-
+        if (result) {
+          return result;
         }
 
       }
 
 
-      const patterns = [
-
-        /(?:rating|stars?|score)[-_ ]?([0-5](?:\.\d+)?)/i,
-
-        /([0-5](?:\.\d+)?)[-_ ]?(?:rating|stars?|score)/i
-
-      ];
+      const result =
+        ratingFromText(
+          text
+        );
 
 
-      for (
-        const pattern
-        of patterns
+      if (result) {
+        return result;
+      }
+
+    }
+
+
+    return null;
+
+  }
+
+
+  function ratingFromText(
+    value
+  ) {
+
+    const text =
+      normalize(value);
+
+
+    if (!text) {
+      return null;
+    }
+
+
+    /*
+      Explicit 10-point scales.
+    */
+
+    let match =
+      text.match(
+        /([0-9]+(?:\.[0-9]+)?)\s*(?:\/|out\s+of)\s*10\b/i
+      );
+
+
+    if (match) {
+
+      return makeRating(
+        Number(
+          match[1]
+        ),
+        10
+      );
+
+    }
+
+
+    /*
+      Explicit five-point scales.
+    */
+
+    match =
+      text.match(
+        /([0-9]+(?:\.[0-9]+)?)\s*(?:\/|out\s+of)\s*5\b/i
+      );
+
+
+    if (match) {
+
+      return makeRating(
+        Number(
+          match[1]
+        ),
+        5
+      );
+
+    }
+
+
+    /*
+      Named rating/score.
+
+      Examples:
+
+      Rating 9.3
+      Score: 8.6
+      Rated 4.7
+    */
+
+    match =
+      text.match(
+        /(?:rating|score)\s*[:\-]?\s*([0-9]+(?:\.[0-9]+)?)/i
+      );
+
+
+    if (match) {
+
+      const number =
+        Number(
+          match[1]
+        );
+
+
+      return validateSemanticRating(
+        number,
+        text
+      );
+
+    }
+
+
+    /*
+      "Rated" can also mean movie
+      certification, so require a number.
+    */
+
+    match =
+      text.match(
+        /\brated\s+([0-9]+(?:\.[0-9]+)?)(?:\s*(?:\/\s*(5|10)))?/i
+      );
+
+
+    if (match) {
+
+      const number =
+        Number(
+          match[1]
+        );
+
+
+      const scale =
+        Number(
+          match[2] ||
+          (
+            number > 5
+              ? 10
+              : 5
+          )
+        );
+
+
+      return makeRating(
+        number,
+        scale
+      );
+
+    }
+
+
+    match =
+      text.match(
+        /([0-5](?:\.\d+)?)\s*stars?\b/i
+      );
+
+
+    if (match) {
+
+      return makeRating(
+        Number(
+          match[1]
+        ),
+        5
+      );
+
+    }
+
+
+    match =
+      text.match(
+        /([0-5](?:\.\d+)?)\s*★/i
+      );
+
+
+    if (match) {
+
+      return makeRating(
+        Number(
+          match[1]
+        ),
+        5
+      );
+
+    }
+
+
+    return null;
+
+  }
+
+
+  /*
+    ==================================================
+    UNICODE STARS
+    ==================================================
+  */
+
+
+  function detectUnicodeStars(
+    item
+  ) {
+
+    const elements =
+      item.querySelectorAll(
+        "span, p, div, small"
+      );
+
+
+    for (
+      const element
+      of elements
+    ) {
+
+      const text =
+        normalize(
+          element.textContent
+        );
+
+
+      const match =
+        text.match(
+          /[★☆]{3,5}/
+        );
+
+
+      if (!match) {
+        continue;
+      }
+
+
+      const stars =
+        match[0];
+
+
+      const filled =
+        (
+          stars.match(/★/g) ||
+          []
+        ).length;
+
+
+      if (
+        filled > 0
       ) {
 
-        const match =
-          className.match(
-            pattern
-          );
-
-
-        if (
-          !match
-        ) {
-
-          continue;
-
-        }
-
-
-        const rating =
-          validateRating(
-            match[1]
-          );
-
-
-        if (
-          rating !== ""
-        ) {
-
-          return rating;
-
-        }
+        return makeRating(
+          filled,
+          stars.length
+        );
 
       }
 
     }
 
 
-    return "";
+    return null;
 
   }
 
 
   /*
-    Universal layered/CSS star detector.
-
-    Many sites render rating like:
-
-    gray stars underneath
-    yellow stars above them
-
-    The yellow layer may have:
-
-    width: 84%
-
-    Instead of containing a numeric value.
+    ==================================================
+    CSS RATING
+    ==================================================
   */
 
-  function detectCssOverlayRating(
+
+  function detectCssRating(
     item
   ) {
 
-    const elements = [
-
-      item,
-
-      ...item.querySelectorAll(
-        "*"
-      )
-
-    ];
+    const elements =
+      item.querySelectorAll(
+        "[class*='rating' i], [class*='star' i], [class*='rate' i], [class*='score' i]"
+      );
 
 
     for (
@@ -958,1151 +925,101 @@
     ) {
 
       const descriptor =
-        buildElementDescriptor(
+        getDescriptor(
           element
-        ).toLowerCase();
+        );
 
 
       if (
-        !/star|rating|score/i
-          .test(
-            descriptor
-          )
+        !hasRatingSemantics(
+          descriptor
+        )
       ) {
-
         continue;
-
       }
 
 
-      const inlineStyle =
+      const style =
         element.getAttribute(
           "style"
         ) ||
         "";
 
 
-      const percentageMatch =
-        inlineStyle.match(
+      const match =
+        style.match(
           /(?:width|max-width)\s*:\s*(\d+(?:\.\d+)?)%/i
         );
 
 
-      if (
-        percentageMatch
-      ) {
-
-        const percentage =
-          Number(
-            percentageMatch[1]
-          );
-
-
-        /*
-          Don't accept 0% automatically.
-
-          0 often belongs to a hidden or
-          animation element rather than an
-          actual zero-star rating.
-        */
-
-        if (
-          percentage > 0 &&
-          percentage <= 100
-        ) {
-
-          const rating =
-            percentage /
-            20;
-
-
-          return formatRating(
-            rating
-          );
-
-        }
-
+      if (!match) {
+        continue;
       }
 
-    }
+
+      const percentage =
+        Number(
+          match[1]
+        );
 
 
-    /*
-      Detect two visual layers using
-      their bounding rectangles.
+      if (
+        percentage <= 0 ||
+        percentage > 100
+      ) {
+        continue;
+      }
 
-      Example:
 
-      full background stars width = 80px
-      filled stars width = 67px
-
-      67 / 80 × 5 = 4.19
-    */
-
-    const containers =
-      findPossibleRatingContainers(
-        item
+      return makeRating(
+        percentage / 20,
+        5
       );
 
-
-    for (
-      const container
-      of containers
-    ) {
-
-      const descendants =
-        Array.from(
-          container.querySelectorAll(
-            "*"
-          )
-        );
-
-
-      const candidates =
-        descendants
-          .map(
-            function (element) {
-
-              const descriptor =
-                buildElementDescriptor(
-                  element
-                ).toLowerCase();
-
-
-              if (
-                !/star|rating|score|fill/i
-                  .test(
-                    descriptor
-                  )
-              ) {
-
-                return null;
-
-              }
-
-
-              const rect =
-                getRectSafe(
-                  element
-                );
-
-
-              if (
-                !rect ||
-                rect.width <= 0 ||
-                rect.height <= 0
-              ) {
-
-                return null;
-
-              }
-
-
-              return {
-
-                element:
-                  element,
-
-                width:
-                  rect.width,
-
-                height:
-                  rect.height,
-
-                descriptor:
-                  descriptor
-
-              };
-
-            }
-          )
-          .filter(Boolean);
-
-
-      if (
-        candidates.length < 2
-      ) {
-
-        continue;
-
-      }
-
-
-      const largestWidth =
-        Math.max(
-          ...candidates.map(
-            function (candidate) {
-
-              return candidate.width;
-
-            }
-          )
-        );
-
-
-      if (
-        largestWidth <= 0
-      ) {
-
-        continue;
-
-      }
-
-
-      for (
-        const candidate
-        of candidates
-      ) {
-
-        if (
-          candidate.width >=
-          largestWidth * 0.99
-        ) {
-
-          continue;
-
-        }
-
-
-        const ratio =
-          candidate.width /
-          largestWidth;
-
-
-        if (
-          ratio <= 0 ||
-          ratio > 1
-        ) {
-
-          continue;
-
-        }
-
-
-        if (
-          /fill|filled|active|foreground|current|selected/i
-            .test(
-              candidate.descriptor
-            )
-        ) {
-
-          const rating =
-            ratio *
-            5;
-
-
-          if (
-            rating >= 0.1 &&
-            rating <= 5
-          ) {
-
-            return formatRating(
-              rating
-            );
-
-          }
-
-        }
-
-      }
-
     }
 
 
-    return "";
-
-  }
-
-
-  function detectIconRating(
-    item
-  ) {
-
-    const containers =
-      findPossibleRatingContainers(
-        item
-      );
-
-
-    for (
-      const container
-      of containers
-    ) {
-
-      const icons =
-        findStarIcons(
-          container
-        );
-
-
-      if (
-        icons.length < 3 ||
-        icons.length > 10
-      ) {
-
-        continue;
-
-      }
-
-
-      /*
-        Avoid counting duplicate nested
-        elements such as:
-
-        svg
-          path
-
-        as separate stars.
-      */
-
-      const normalizedIcons =
-        removeNestedDuplicateStars(
-          icons
-        );
-
-
-      if (
-        normalizedIcons.length < 3 ||
-        normalizedIcons.length > 5
-      ) {
-
-        continue;
-
-      }
-
-
-      let filled =
-        0;
-
-      let half =
-        0;
-
-      let empty =
-        0;
-
-      let uncertain =
-        0;
-
-
-      for (
-        const icon
-        of normalizedIcons
-      ) {
-
-        const state =
-          classifyStar(
-            icon
-          );
-
-
-        if (
-          state === "filled"
-        ) {
-
-          filled++;
-
-        } else if (
-          state === "half"
-        ) {
-
-          half++;
-
-        } else if (
-          state === "empty"
-        ) {
-
-          empty++;
-
-        } else {
-
-          uncertain++;
-
-        }
-
-      }
-
-
-      const total =
-        filled +
-        half +
-        empty +
-        uncertain;
-
-
-      if (
-        total < 3 ||
-        total > 5
-      ) {
-
-        continue;
-
-      }
-
-
-      /*
-        IMPORTANT FIX.
-
-        Previously:
-
-        5 stars found
-        but all interpreted as empty
-        => Rating 0
-
-        That is too dangerous.
-
-        If we cannot confidently detect
-        even one filled/half star, return
-        no result instead of fabricating 0.
-      */
-
-      if (
-        filled === 0 &&
-        half === 0
-      ) {
-
-        continue;
-
-      }
-
-
-      /*
-        If too many icons are uncertain,
-        this container isn't trustworthy.
-      */
-
-      if (
-        uncertain >
-        2
-      ) {
-
-        continue;
-
-      }
-
-
-      const rating =
-        filled +
-        (
-          half *
-          0.5
-        );
-
-
-      if (
-        rating > 0 &&
-        rating <= 5
-      ) {
-
-        return formatRating(
-          rating
-        );
-
-      }
-
-    }
-
-
-    /*
-      Last visual method:
-      compare computed visual styles
-      across exactly five stars.
-    */
-
-    return detectRelativeStarColors(
-      item
-    );
-
-  }
-
-
-  function findStarIcons(
-    container
-  ) {
-
-    const elements =
-      Array.from(
-        container.querySelectorAll(
-          "i, span, svg, use, path"
-        )
-      );
-
-
-    return elements.filter(
-      function (element) {
-
-        const descriptor =
-          buildElementDescriptor(
-            element
-          );
-
-
-        return /star/i.test(
-          descriptor
-        );
-
-      }
-    );
-
-  }
-
-
-  function removeNestedDuplicateStars(
-    icons
-  ) {
-
-    const result =
-      [];
-
-
-    for (
-      const icon
-      of icons
-    ) {
-
-      const hasAncestor =
-        icons.some(
-          function (other) {
-
-            return (
-              other !== icon &&
-              other.contains(
-                icon
-              ) &&
-              /star/i.test(
-                buildElementDescriptor(
-                  other
-                )
-              )
-            );
-
-          }
-        );
-
-
-      if (
-        !hasAncestor
-      ) {
-
-        result.push(
-          icon
-        );
-
-      }
-
-    }
-
-
-    return result;
-
-  }
-
-
-  function classifyStar(
-    element
-  ) {
-
-    const descriptor =
-      buildElementDescriptor(
-        element
-      ).toLowerCase();
-
-
-    if (
-      /half|50-percent|half-filled|star-half/i
-        .test(
-          descriptor
-        )
-    ) {
-
-      return "half";
-
-    }
-
-
-    if (
-      /empty|outline|outlined|regular|unfilled|inactive|star-o|off/i
-        .test(
-          descriptor
-        )
-    ) {
-
-      return "empty";
-
-    }
-
-
-    if (
-      /filled|solid|active|selected|checked|star-fill|star_filled|on/i
-        .test(
-          descriptor
-        )
-    ) {
-
-      return "filled";
-
-    }
-
-
-    /*
-      Font Awesome.
-    */
-
-    if (
-      /\bfar\b/.test(
-        descriptor
-      ) ||
-      /fa-regular/.test(
-        descriptor
-      )
-    ) {
-
-      return "empty";
-
-    }
-
-
-    if (
-      /\bfas\b/.test(
-        descriptor
-      ) ||
-      /fa-solid/.test(
-        descriptor
-      )
-    ) {
-
-      return "filled";
-
-    }
-
-
-    /*
-      Bootstrap Icons.
-    */
-
-    if (
-      /bi-star-fill/.test(
-        descriptor
-      )
-    ) {
-
-      return "filled";
-
-    }
-
-
-    if (
-      /bi-star-half/.test(
-        descriptor
-      )
-    ) {
-
-      return "half";
-
-    }
-
-
-    /*
-      Material-like names.
-    */
-
-    if (
-      /star_border|star-outline/.test(
-        descriptor
-      )
-    ) {
-
-      return "empty";
-
-    }
-
-
-    /*
-      SVG direct attributes.
-    */
-
-    const fillAttribute =
-      (
-        element.getAttribute(
-          "fill"
-        ) ||
-        ""
-      ).trim()
-        .toLowerCase();
-
-
-    const strokeAttribute =
-      (
-        element.getAttribute(
-          "stroke"
-        ) ||
-        ""
-      ).trim()
-        .toLowerCase();
-
-
-    if (
-      fillAttribute &&
-      fillAttribute !== "none" &&
-      fillAttribute !== "transparent" &&
-      fillAttribute !==
-        "currentcolor"
-    ) {
-
-      return "filled";
-
-    }
-
-
-    if (
-      fillAttribute === "none" &&
-      strokeAttribute &&
-      strokeAttribute !==
-        "none"
-    ) {
-
-      return "empty";
-
-    }
-
-
-    /*
-      Computed style fallback.
-
-      We intentionally don't call a
-      normal color "filled" by itself,
-      because outline stars can also
-      inherit color.
-    */
-
-    const style =
-      getComputedStyleSafe(
-        element
-      );
-
-
-    if (
-      style
-    ) {
-
-      const fill =
-        normalizeCssColor(
-          style.fill
-        );
-
-
-      const stroke =
-        normalizeCssColor(
-          style.stroke
-        );
-
-
-      if (
-        isVisibleColor(
-          fill
-        ) &&
-        !isVisibleColor(
-          stroke
-        )
-      ) {
-
-        return "filled";
-
-      }
-
-
-      if (
-        !isVisibleColor(
-          fill
-        ) &&
-        isVisibleColor(
-          stroke
-        )
-      ) {
-
-        return "empty";
-
-      }
-
-    }
-
-
-    return "uncertain";
+    return null;
 
   }
 
 
   /*
-    Generic relative-color detection.
-
-    Useful where five SVGs all have the
-    same class but filled stars use one
-    color and empty stars another.
+    ==================================================
+    REVIEW / RATING COUNT
+    ==================================================
   */
-
-  function detectRelativeStarColors(
-    item
-  ) {
-
-    const containers =
-      findPossibleRatingContainers(
-        item
-      );
-
-
-    for (
-      const container
-      of containers
-    ) {
-
-      const icons =
-        removeNestedDuplicateStars(
-          findStarIcons(
-            container
-          )
-        );
-
-
-      if (
-        icons.length !== 5
-      ) {
-
-        continue;
-
-      }
-
-
-      const signatures =
-        icons.map(
-          function (icon) {
-
-            return getVisualSignature(
-              icon
-            );
-
-          }
-        );
-
-
-      if (
-        signatures.some(
-          function (signature) {
-
-            return (
-              signature === ""
-            );
-
-          }
-        )
-      ) {
-
-        continue;
-
-      }
-
-
-      const groups =
-        new Map();
-
-
-      signatures.forEach(
-        function (
-          signature,
-          index
-        ) {
-
-          if (
-            !groups.has(
-              signature
-            )
-          ) {
-
-            groups.set(
-              signature,
-              []
-            );
-
-          }
-
-
-          groups.get(
-            signature
-          ).push(
-            index
-          );
-
-        }
-      );
-
-
-      /*
-        One visual style for all five
-        stars doesn't tell us the rating.
-      */
-
-      if (
-        groups.size < 2
-      ) {
-
-        continue;
-
-      }
-
-
-      /*
-        Rating stars normally fill from
-        left to right.
-
-        Find the longest prefix using
-        the first star's visual style.
-      */
-
-      const firstSignature =
-        signatures[0];
-
-
-      let filledPrefix =
-        0;
-
-
-      for (
-        const signature
-        of signatures
-      ) {
-
-        if (
-          signature ===
-          firstSignature
-        ) {
-
-          filledPrefix++;
-
-        } else {
-
-          break;
-
-        }
-
-      }
-
-
-      if (
-        filledPrefix <= 0 ||
-        filledPrefix >= 5
-      ) {
-
-        continue;
-
-      }
-
-
-      /*
-        Verify remaining stars consistently
-        use a different visual state.
-      */
-
-      const remaining =
-        signatures.slice(
-          filledPrefix
-        );
-
-
-      const remainingUnique =
-        new Set(
-          remaining
-        );
-
-
-      if (
-        remainingUnique.size === 1 &&
-        !remainingUnique.has(
-          firstSignature
-        )
-      ) {
-
-        return String(
-          filledPrefix
-        );
-
-      }
-
-    }
-
-
-    return "";
-
-  }
-
-
-  function getVisualSignature(
-    element
-  ) {
-
-    const style =
-      getComputedStyleSafe(
-        element
-      );
-
-
-    if (!style) {
-
-      return "";
-
-    }
-
-
-    const fill =
-      normalizeCssColor(
-        style.fill
-      );
-
-
-    const stroke =
-      normalizeCssColor(
-        style.stroke
-      );
-
-
-    const color =
-      normalizeCssColor(
-        style.color
-      );
-
-
-    const opacity =
-      String(
-        style.opacity ||
-        ""
-      );
-
-
-    return [
-
-      fill,
-      stroke,
-      color,
-      opacity
-
-    ].join("|");
-
-  }
-
-
-  function findPossibleRatingContainers(
-    item
-  ) {
-
-    const result =
-      [];
-
-    const seen =
-      new Set();
-
-
-    const candidates =
-      item.querySelectorAll(
-        "[class*='star' i], [class*='rating' i], [class*='review' i], [aria-label*='star' i], [aria-label*='rating' i], [data-rating], [data-score], svg, i"
-      );
-
-
-    candidates.forEach(
-      function (element) {
-
-        let current =
-          element;
-
-
-        for (
-          let level = 0;
-          level < 4;
-          level++
-        ) {
-
-          if (
-            !current ||
-            current ===
-              item.parentElement
-          ) {
-
-            break;
-
-          }
-
-
-          const descriptor =
-            buildElementDescriptor(
-              current
-            );
-
-
-          const starCount =
-            current.querySelectorAll(
-              "[class*='star' i], [data-icon*='star' i], use[href*='star' i], use[xlink\\:href*='star' i]"
-            ).length;
-
-
-          if (
-            /star|rating|review|score/i
-              .test(
-                descriptor
-              ) ||
-            starCount >= 3
-          ) {
-
-            if (
-              !seen.has(
-                current
-              )
-            ) {
-
-              seen.add(
-                current
-              );
-
-
-              result.push(
-                current
-              );
-
-            }
-
-          }
-
-
-          current =
-            current.parentElement;
-
-        }
-
-      }
-    );
-
-
-    return result;
-
-  }
 
 
   function detectReviewCount(
     item
   ) {
 
-    /*
-      Preferred rating/review-related
-      elements first.
-    */
-
-    const preferred =
+    const elements =
       item.querySelectorAll(
-        "[class*='review' i], [class*='rating' i], [class*='star' i], [data-review-count], [data-rating-count], [itemprop='reviewCount'], [itemprop='ratingCount']"
+        [
+          "[itemprop='reviewCount']",
+          "[itemprop='ratingCount']",
+          "[data-review-count]",
+          "[data-rating-count]",
+          "[class*='review' i]",
+          "[class*='rating' i]",
+          "[class*='rate' i]",
+          "[class*='score' i]"
+        ].join(",")
       );
 
 
     for (
       const element
-      of preferred
+      of elements
     ) {
 
       const values = [
+
+        element.getAttribute(
+          "content"
+        ),
 
         element.getAttribute(
           "data-review-count"
@@ -2110,10 +1027,6 @@
 
         element.getAttribute(
           "data-rating-count"
-        ),
-
-        element.getAttribute(
-          "content"
         )
 
       ];
@@ -2124,50 +1037,34 @@
         of values
       ) {
 
-        if (
-          value === null ||
-          value === ""
-        ) {
-
-          continue;
-
-        }
-
-
-        const count =
-          extractWholeNumber(
+        const result =
+          normalizeCount(
             value
           );
 
 
         if (
-          count !== ""
+          result !== ""
         ) {
-
-          return count;
-
+          return result;
         }
 
       }
 
 
       const text =
-        (
-          element.innerText ||
-          element.textContent ||
-          ""
-        ).trim();
+        normalize(
+          element.textContent
+        );
 
 
       const explicit =
         text.match(
-          /\b([\d,.]+[KkMm]?)\s*(?:reviews?|ratings?)\b/i
+          /\b([\d,.]+(?:\.\d+)?[KkMm]?)\s*(?:reviews?|ratings?|votes?)\b/i
         );
 
 
-      if (
-        explicit
-      ) {
+      if (explicit) {
 
         return normalizeCount(
           explicit[1]
@@ -2176,119 +1073,19 @@
       }
 
 
-      /*
-        Common ecommerce pattern:
-
-        ★★★★☆ (293)
-      */
-
-      const bracket =
+      const brackets =
         text.match(
-          /\(\s*([\d,.]+[KkMm]?)\s*\)/
+          /\(\s*([\d,.]+(?:\.\d+)?[KkMm]?)\s*\)/
         );
 
 
-      if (
-        bracket
-      ) {
+      if (brackets) {
 
         return normalizeCount(
-          bracket[1]
+          brackets[1]
         );
 
       }
-
-    }
-
-
-    /*
-      Scan small descendant elements.
-
-      This catches cases where the count
-      is a sibling of SVG stars.
-    */
-
-    const elements =
-      item.querySelectorAll(
-        "span, small, div, p"
-      );
-
-
-    for (
-      const element
-      of elements
-    ) {
-
-      const text =
-        (
-          element.innerText ||
-          element.textContent ||
-          ""
-        ).trim();
-
-
-      if (
-        text.length > 50
-      ) {
-
-        continue;
-
-      }
-
-
-      const bracketOnly =
-        text.match(
-          /^\(\s*([\d,.]+[KkMm]?)\s*\)$/
-        );
-
-
-      if (
-        bracketOnly
-      ) {
-
-        const parent =
-          element.parentElement;
-
-
-        if (
-          parent &&
-          isRatingRelatedElement(
-            parent
-          )
-        ) {
-
-          return normalizeCount(
-            bracketOnly[1]
-          );
-
-        }
-
-      }
-
-    }
-
-
-    const text =
-      (
-        item.innerText ||
-        item.textContent ||
-        ""
-      );
-
-
-    const explicit =
-      text.match(
-        /\b([\d,.]+[KkMm]?)\s*(?:reviews?|ratings?)\b/i
-      );
-
-
-    if (
-      explicit
-    ) {
-
-      return normalizeCount(
-        explicit[1]
-      );
 
     }
 
@@ -2298,65 +1095,164 @@
   }
 
 
-  function isRatingRelatedElement(
-    element
+  /*
+    ==================================================
+    HELPERS
+    ==================================================
+  */
+
+
+  function validateSemanticRating(
+    value,
+    context
   ) {
 
-    if (!element) {
+    const number =
+      Number(value);
 
-      return false;
 
+    if (
+      !Number.isFinite(number) ||
+      number < 0
+    ) {
+      return null;
     }
 
 
-    const descriptor =
-      buildElementDescriptor(
-        element
+    const text =
+      String(
+        context ||
+        ""
       );
 
 
     if (
-      /rating|review|star|score/i
-        .test(
-          descriptor
-        )
+      /\b(?:\/|out\s+of)\s*10\b/i
+        .test(text) ||
+      /\b10[-_ ]?(?:point|star|rating|score)\b/i
+        .test(text)
     ) {
 
-      return true;
+      return makeRating(
+        number,
+        10
+      );
 
     }
-
-
-    const starElements =
-      element.querySelectorAll(
-        "[class*='star' i], [data-icon*='star' i], svg, use"
-      );
 
 
     if (
-      starElements.length >= 3
+      /\b(?:\/|out\s+of)\s*5\b/i
+        .test(text) ||
+      /\b5[-_ ]?(?:point|star|rating|score)\b/i
+        .test(text)
     ) {
 
-      return true;
+      return makeRating(
+        number,
+        5
+      );
 
     }
 
 
-    return false;
+    if (
+      number <= 5
+    ) {
+
+      return makeRating(
+        number,
+        5
+      );
+
+    }
+
+
+    /*
+      Values between 5 and 10 are accepted
+      only when the surrounding element is
+      explicitly a rating/score component.
+    */
+
+    if (
+      number <= 10 &&
+      hasRatingSemantics(
+        text
+      )
+    ) {
+
+      return makeRating(
+        number,
+        10
+      );
+
+    }
+
+
+    return null;
 
   }
 
 
-  function buildElementDescriptor(
-    element
+  function makeRating(
+    value,
+    scale
   ) {
 
-    if (!element) {
+    const number =
+      Number(value);
 
-      return "";
 
+    const maximum =
+      Number(scale);
+
+
+    if (
+      !Number.isFinite(number) ||
+      !Number.isFinite(maximum) ||
+      maximum <= 0 ||
+      number < 0 ||
+      number > maximum
+    ) {
+      return null;
     }
 
+
+    return {
+
+      rating:
+        formatRating(
+          number
+        ),
+
+      scale:
+        String(
+          maximum
+        )
+
+    };
+
+  }
+
+
+  function hasRatingSemantics(
+    value
+  ) {
+
+    return /rating|ratings|rate|score|stars?|aggregate[-_ ]?rating/i
+      .test(
+        String(
+          value ||
+          ""
+        )
+      );
+
+  }
+
+
+  function getDescriptor(
+    element
+  ) {
 
     return [
 
@@ -2367,15 +1263,7 @@
       element.id,
 
       element.getAttribute(
-        "data-icon"
-      ),
-
-      element.getAttribute(
-        "data-rating"
-      ),
-
-      element.getAttribute(
-        "data-score"
+        "itemprop"
       ),
 
       element.getAttribute(
@@ -2387,19 +1275,23 @@
       ),
 
       element.getAttribute(
-        "href"
+        "data-testid"
       ),
 
       element.getAttribute(
-        "xlink:href"
+        "data-rating"
       ),
 
       element.getAttribute(
-        "fill"
+        "data-rating-value"
       ),
 
       element.getAttribute(
-        "stroke"
+        "data-score"
+      ),
+
+      element.getAttribute(
+        "data-stars"
       )
 
     ]
@@ -2413,20 +1305,11 @@
     element
   ) {
 
-    if (!element) {
-
-      return "";
-
-    }
-
-
     if (
       typeof element.className ===
       "string"
     ) {
-
       return element.className;
-
     }
 
 
@@ -2434,9 +1317,7 @@
       element.className &&
       element.className.baseVal
     ) {
-
       return element.className.baseVal;
-
     }
 
 
@@ -2450,163 +1331,25 @@
   }
 
 
-  function getComputedStyleSafe(
-    element
-  ) {
-
-    try {
-
-      return window.getComputedStyle(
-        element
-      );
-
-    } catch (error) {
-
-      return null;
-
-    }
-
-  }
-
-
-  function getRectSafe(
-    element
-  ) {
-
-    try {
-
-      return element.getBoundingClientRect();
-
-    } catch (error) {
-
-      return null;
-
-    }
-
-  }
-
-
-  function normalizeCssColor(
+  function firstNumber(
     value
   ) {
 
-    return String(
-      value ||
-      ""
-    )
-      .replace(
-        /\s+/g,
+    const match =
+      String(
+        value ||
         ""
       )
-      .toLowerCase();
-
-  }
-
-
-  function isVisibleColor(
-    value
-  ) {
-
-    if (!value) {
-
-      return false;
-
-    }
-
-
-    const invisibleValues = [
-
-      "none",
-      "transparent",
-      "rgba(0,0,0,0)",
-      "hsla(0,0%,0%,0)"
-
-    ];
-
-
-    return !invisibleValues.includes(
-      value
-    );
-
-  }
-
-
-  function firstValidRating(
-    values
-  ) {
-
-    for (
-      const value
-      of values
-    ) {
-
-      const rating =
-        validateRating(
-          value
+        .match(
+          /-?\d+(?:\.\d+)?/
         );
 
 
-      if (
-        rating !== ""
-      ) {
-
-        return rating;
-
-      }
-
-    }
-
-
-    return "";
-
-  }
-
-
-  function validateRating(
-    value
-  ) {
-
-    if (
-      value === "" ||
-      value === null ||
-      value === undefined
-    ) {
-
-      return "";
-
-    }
-
-
-    const number =
-      Number(
-        value
-      );
-
-
-    if (
-      !Number.isFinite(
-        number
-      )
-    ) {
-
-      return "";
-
-    }
-
-
-    if (
-      number < 0 ||
-      number > 5
-    ) {
-
-      return "";
-
-    }
-
-
-    return formatRating(
-      number
-    );
+    return match
+      ? Number(
+          match[0]
+        )
+      : NaN;
 
   }
 
@@ -2615,97 +1358,11 @@
     value
   ) {
 
-    const number =
-      Number(
-        value
-      );
-
-
-    if (
-      !Number.isFinite(
-        number
-      )
-    ) {
-
-      return "";
-
-    }
-
-
-    const rounded =
-      Math.round(
-        number *
-        10
-      ) /
-      10;
-
-
     return String(
-      rounded
-    );
-
-  }
-
-
-  function extractNumber(
-    value
-  ) {
-
-    if (
-      value === null ||
-      value === undefined
-    ) {
-
-      return "";
-
-    }
-
-
-    const match =
-      String(
-        value
-      ).match(
-        /\d+(?:\.\d+)?/
-      );
-
-
-    return (
-      match
-        ? match[0]
-        : ""
-    );
-
-  }
-
-
-  function extractWholeNumber(
-    value
-  ) {
-
-    if (
-      value === null ||
-      value === undefined
-    ) {
-
-      return "";
-
-    }
-
-
-    const match =
-      String(
-        value
-      ).match(
-        /[\d,.]+[KkMm]?/
-      );
-
-
-    return (
-      match
-        ? normalizeCount(
-            match[0]
-          )
-        : ""
+      Math.round(
+        Number(value) *
+        10
+      ) / 10
     );
 
   }
@@ -2715,38 +1372,36 @@
     value
   ) {
 
-    if (!value) {
-
+    if (
+      value === null ||
+      value === undefined ||
+      value === ""
+    ) {
       return "";
-
     }
 
 
     const text =
-      String(
-        value
-      )
-        .trim()
+      String(value)
         .replace(
           /,/g,
           ""
-        );
+        )
+        .trim();
 
 
     const match =
       text.match(
-        /^(\d+(?:\.\d+)?)([KkMm])?$/
+        /(\d+(?:\.\d+)?)([KkMm])?/
       );
 
 
     if (!match) {
-
-      return text;
-
+      return "";
     }
 
 
-    const number =
+    let number =
       Number(
         match[1]
       );
@@ -2756,40 +1411,53 @@
       (
         match[2] ||
         ""
-      ).toLowerCase();
+      )
+        .toLowerCase();
 
 
     if (
       suffix === "k"
     ) {
-
-      return String(
-        Math.round(
-          number *
-          1000
-        )
-      );
-
+      number *= 1000;
     }
 
 
     if (
       suffix === "m"
     ) {
-
-      return String(
-        Math.round(
-          number *
-          1000000
-        )
-      );
-
+      number *= 1000000;
     }
 
 
+    /*
+      Preserve large counts as normal
+      numbers for analysis.
+    */
+
     return String(
-      number
+      Math.round(number)
     );
+
+  }
+
+
+  function normalize(
+    value
+  ) {
+
+    return String(
+      value ||
+      ""
+    )
+      .replace(
+        /\u00a0/g,
+        " "
+      )
+      .replace(
+        /\s+/g,
+        " "
+      )
+      .trim();
 
   }
 

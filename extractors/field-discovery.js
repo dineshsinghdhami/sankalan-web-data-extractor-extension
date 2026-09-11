@@ -3,7 +3,6 @@
   globalThis.Sankalan =
     globalThis.Sankalan || {};
 
-
   globalThis.Sankalan.fieldDiscovery = {
     discover: discoverFields
   };
@@ -15,162 +14,122 @@
       !Array.isArray(items) ||
       items.length === 0
     ) {
-
       return [];
-
     }
 
 
     const recordMaps =
-      items.map(
-        function (item) {
-
-          return buildRecordMap(item);
-
-        }
-      );
+      items.map(function (item) {
+        return buildRecordMap(item);
+      });
 
 
     const fieldMap =
       new Map();
 
 
-    recordMaps.forEach(
-      function (
-        recordMap,
-        recordIndex
-      ) {
+    recordMaps.forEach(function (recordMap, recordIndex) {
 
-        recordMap.forEach(
-          function (
-            nodeInfo,
-            path
-          ) {
+      recordMap.forEach(function (nodeInfo, path) {
 
-            if (
-              !fieldMap.has(path)
-            ) {
+        if (!fieldMap.has(path)) {
 
-              fieldMap.set(
-                path,
-                {
-                  path: path,
-
-                  occurrences: 0,
-
-                  values: [],
-
-                  valuesByRecord:
-                    new Map(),
-
-                  nodeTypes:
-                    new Set(),
-
-                  tagNames:
-                    new Set(),
-
-                  classes:
-                    new Set(),
-
-                  attributes:
-                    new Map(),
-
-                  examples: []
-                }
-              );
-
+          fieldMap.set(
+            path,
+            {
+              path: path,
+              occurrences: 0,
+              values: [],
+              valuesByRecord: new Map(),
+              nodeTypes: new Set(),
+              tagNames: new Set(),
+              classes: new Set(),
+              attributes: new Map(),
+              examples: []
             }
+          );
+
+        }
 
 
-            const field =
-              fieldMap.get(path);
+        const field =
+          fieldMap.get(path);
 
 
-            field.occurrences++;
+        field.occurrences++;
 
 
-            field.nodeTypes.add(
-              nodeInfo.type
-            );
-
-
-            field.tagNames.add(
-              nodeInfo.tagName
-            );
-
-
-            nodeInfo.classes.forEach(
-              function (className) {
-
-                field.classes.add(
-                  className
-                );
-
-              }
-            );
-
-
-            nodeInfo.attributes.forEach(
-              function (
-                value,
-                name
-              ) {
-
-                if (
-                  !field.attributes.has(name)
-                ) {
-
-                  field.attributes.set(
-                    name,
-                    new Set()
-                  );
-
-                }
-
-
-                field.attributes
-                  .get(name)
-                  .add(value);
-
-              }
-            );
-
-
-            const normalized =
-              normalizeValue(
-                nodeInfo.value
-              );
-
-
-            field.values.push({
-              recordIndex: recordIndex,
-              value: normalized,
-              type: nodeInfo.type
-            });
-
-
-            field.valuesByRecord.set(
-              recordIndex,
-              normalized
-            );
-
-
-            if (
-              normalized !== "" &&
-              field.examples.length < 6
-            ) {
-
-              field.examples.push(
-                normalized
-              );
-
-            }
-
-          }
+        field.nodeTypes.add(
+          nodeInfo.type
         );
 
-      }
-    );
+
+        field.tagNames.add(
+          nodeInfo.tagName
+        );
+
+
+        nodeInfo.classes.forEach(function (className) {
+
+          field.classes.add(
+            className
+          );
+
+        });
+
+
+        nodeInfo.attributes.forEach(function (value, name) {
+
+          if (!field.attributes.has(name)) {
+
+            field.attributes.set(
+              name,
+              new Set()
+            );
+
+          }
+
+
+          field.attributes
+            .get(name)
+            .add(value);
+
+        });
+
+
+        const normalized =
+          normalizeValue(
+            nodeInfo.value
+          );
+
+
+        field.values.push({
+          recordIndex: recordIndex,
+          value: normalized,
+          type: nodeInfo.type
+        });
+
+
+        field.valuesByRecord.set(
+          recordIndex,
+          normalized
+        );
+
+
+        if (
+          normalized &&
+          field.examples.length < 6
+        ) {
+
+          field.examples.push(
+            normalized
+          );
+
+        }
+
+      });
+
+    });
 
 
     const totalRecords =
@@ -181,151 +140,105 @@
       [];
 
 
-    fieldMap.forEach(
-      function (field) {
+    fieldMap.forEach(function (field) {
 
-        const presenceRatio =
-          field.occurrences /
-          totalRecords;
-
-
-        /*
-          Keep optional fields.
-
-          Something appearing in only part
-          of the records can still be useful:
-          discount, badge, location,
-          availability, review count, etc.
-        */
-
-        if (
-          presenceRatio < 0.15
-        ) {
-
-          return;
-
-        }
+      const presenceRatio =
+        field.occurrences /
+        totalRecords;
 
 
-        const values =
-          field.values
-            .map(
-              function (entry) {
+      if (
+        presenceRatio < 0.15
+      ) {
+        return;
+      }
 
-                return normalizeValue(
-                  entry.value
-                );
 
-              }
-            )
-            .filter(
-              function (value) {
-
-                return value !== "";
-
-              }
+      const values =
+        field.values
+          .map(function (entry) {
+            return normalizeValue(
+              entry.value
             );
+          })
+          .filter(function (value) {
+            return value !== "";
+          });
 
 
-        if (
-          values.length === 0
-        ) {
-
-          return;
-
-        }
+      if (
+        values.length === 0
+      ) {
+        return;
+      }
 
 
-        const uniqueValues =
-          new Set(values);
+      const uniqueValues =
+        new Set(values);
 
 
-        const variationRatio =
-          uniqueValues.size /
-          values.length;
+      const variationRatio =
+        uniqueValues.size /
+        values.length;
 
 
-        const semanticType =
-          inferSemanticType(
-            values,
-            field
-          );
+      const semanticType =
+        inferSemanticType(
+          values,
+          field
+        );
 
 
-        const name =
-          inferFieldName(
-            field,
-            semanticType,
-            values
-          );
+      const name =
+        inferFieldName(
+          field,
+          semanticType,
+          values
+        );
 
 
-        const score =
+      candidates.push({
+
+        id:
+          createFieldId(
+            field.path
+          ),
+
+        name:
+          name,
+
+        path:
+          field.path,
+
+        type:
+          semanticType,
+
+        presence:
+          Math.round(
+            presenceRatio * 100
+          ),
+
+        score:
           calculateFieldScore(
             field,
             presenceRatio,
             variationRatio,
             semanticType,
             name
-          );
+          ),
 
+        examples:
+          Array.from(
+            uniqueValues
+          ).slice(0, 3),
 
-        candidates.push({
+        _valuesByRecord:
+          field.valuesByRecord
 
-          id:
-            createFieldId(
-              field.path
-            ),
+      });
 
-          name:
-            name,
+    });
 
-          path:
-            field.path,
-
-          type:
-            semanticType,
-
-          presence:
-            Math.round(
-              presenceRatio * 100
-            ),
-
-          score:
-            score,
-
-          examples:
-            Array.from(
-              uniqueValues
-            ).slice(
-              0,
-              3
-            ),
-
-          _valuesByRecord:
-            field.valuesByRecord,
-
-          _tagNames:
-            field.tagNames
-
-        });
-
-      }
-    );
-
-
-    /*
-      Remove parent/container values such as:
-
-      Product name Rs.500 20% Off 8 sold
-
-      when the child fields already contain:
-
-      Product name
-      Rs.500
-      20% Off
-      8 sold
-    */
 
     candidates =
       removeAggregateParentFields(
@@ -334,65 +247,860 @@
       );
 
 
-    /*
-      Remove fields that contain virtually
-      the same value across records.
-    */
-
     candidates =
       removeEquivalentFields(
         candidates
       );
 
 
-    candidates.sort(
-      function (a, b) {
+    /*
+      ================================================
+      DYNAMIC NON-TEXT SEMANTIC FIELDS
+      ================================================
 
-        return (
-          b.score -
-          a.score
+      Rating is NOT permanently added.
+
+      We inspect the repeated records first.
+
+      If enough records genuinely expose a rating
+      through text, attributes, classes, stars,
+      structured metadata, etc., Rating becomes
+      a discovered field.
+    */
+
+
+    const ratingField =
+      discoverRatingField(
+        items
+      );
+
+
+    if (ratingField) {
+
+      const alreadyHasRating =
+        candidates.some(function (field) {
+
+          return (
+            normalizeFieldName(
+              field.name
+            ) === "rating"
+          );
+
+        });
+
+
+      if (!alreadyHasRating) {
+
+        candidates.push(
+          ratingField
         );
 
       }
+
+    }
+
+
+    candidates.sort(
+      compareFieldsForExport
     );
 
 
-    /*
-      Internal metadata is needed only
-      during discovery.
+    return candidates.map(function (field) {
 
-      Do not expose it to popup.js.
+      return {
+
+        id:
+          field.id,
+
+        name:
+          field.name,
+
+        path:
+          field.path,
+
+        type:
+          field.type,
+
+        presence:
+          field.presence,
+
+        score:
+          field.score,
+
+        examples:
+          field.examples
+
+      };
+
+    });
+
+  }
+
+
+  /*
+    ==================================================
+    DYNAMIC RATING DISCOVERY
+    ==================================================
+  */
+
+
+  function discoverRatingField(
+    items
+  ) {
+
+    const values =
+      [];
+
+
+    let found =
+      0;
+
+
+    items.forEach(function (item) {
+
+      const rating =
+        extractSemanticRating(
+          item
+        );
+
+
+      values.push(
+        rating
+      );
+
+
+      if (
+        rating !== ""
+      ) {
+        found++;
+      }
+
+    });
+
+
+    const ratio =
+      found /
+      items.length;
+
+
+    /*
+      Optional fields are allowed.
+
+      15% lets us preserve ratings when only some
+      cards have ratings/reviews yet.
     */
 
-    return candidates.map(
-      function (field) {
+    if (
+      ratio < 0.15
+    ) {
+      return null;
+    }
 
-        return {
 
-          id:
-            field.id,
+    const examples =
+      values
+        .filter(Boolean)
+        .slice(0, 3);
 
-          name:
-            field.name,
 
-          path:
-            field.path,
+    return {
 
-          type:
-            field.type,
+      id:
+        "semantic_rating",
 
-          presence:
-            field.presence,
+      name:
+        "Rating",
 
-          score:
-            field.score,
+      path:
+        "@semantic:rating",
 
-          examples:
-            field.examples
+      type:
+        "rating",
 
-        };
+      presence:
+        Math.round(
+          ratio * 100
+        ),
+
+      score:
+        220,
+
+      examples:
+        examples
+
+    };
+
+  }
+
+
+  function extractSemanticRating(
+    item
+  ) {
+
+    /*
+      1. schema.org / structured rating
+    */
+
+    const structured =
+      item.querySelector(
+        "[itemprop='ratingValue']"
+      );
+
+
+    if (structured) {
+
+      const value =
+        firstNumber(
+          structured.getAttribute(
+            "content"
+          ) ||
+          structured.getAttribute(
+            "value"
+          ) ||
+          structured.textContent
+        );
+
+
+      if (
+        isReasonableRating(
+          value
+        )
+      ) {
+        return formatNumber(
+          value
+        );
+      }
+
+    }
+
+
+    /*
+      2. Explicit rating attributes
+    */
+
+    const attributeElements =
+      item.querySelectorAll(
+        [
+          "[data-rating]",
+          "[data-rating-value]",
+          "[data-score]",
+          "[data-stars]",
+          "[data-star-rating]",
+          "[aria-valuenow]",
+          "[aria-label]",
+          "[title]"
+        ].join(",")
+      );
+
+
+    for (
+      const element
+      of attributeElements
+    ) {
+
+      const descriptor =
+        buildElementDescriptor(
+          element
+        );
+
+
+      const attributes = [
+
+        "data-rating",
+        "data-rating-value",
+        "data-score",
+        "data-stars",
+        "data-star-rating"
+
+      ];
+
+
+      for (
+        const attribute
+        of attributes
+      ) {
+
+        const raw =
+          element.getAttribute(
+            attribute
+          );
+
+
+        if (!raw) {
+          continue;
+        }
+
+
+        const number =
+          firstNumber(raw);
+
+
+        if (
+          /rating|score|star/i
+            .test(descriptor) &&
+          isReasonableRating(
+            number
+          )
+        ) {
+
+          return formatNumber(
+            number
+          );
+
+        }
 
       }
+
+
+      const ariaValue =
+        element.getAttribute(
+          "aria-valuenow"
+        );
+
+
+      if (
+        ariaValue &&
+        /rating|score|star/i
+          .test(descriptor)
+      ) {
+
+        const number =
+          firstNumber(
+            ariaValue
+          );
+
+
+        if (
+          isReasonableRating(
+            number
+          )
+        ) {
+
+          return formatNumber(
+            number
+          );
+
+        }
+
+      }
+
+
+      const label =
+        (
+          element.getAttribute(
+            "aria-label"
+          ) ||
+          element.getAttribute(
+            "title"
+          ) ||
+          ""
+        );
+
+
+      const textual =
+        extractRatingFromText(
+          label
+        );
+
+
+      if (
+        textual !== ""
+      ) {
+        return textual;
+      }
+
+    }
+
+
+    /*
+      3. Class-based star rating.
+
+      Example:
+
+      star-rating Three
+      star-rating One
+      star-rating Five
+
+      This is generic:
+      we only interpret number words when the
+      same class descriptor clearly represents
+      a rating/star component.
+    */
+
+    const ratingElements =
+      item.querySelectorAll(
+        "[class*='rating' i], [class*='star' i], [class*='score' i], [class*='rate' i]"
+      );
+
+
+    const wordValues = {
+
+      zero: 0,
+      one: 1,
+      two: 2,
+      three: 3,
+      four: 4,
+      five: 5
+
+    };
+
+
+    for (
+      const element
+      of ratingElements
+    ) {
+
+      const descriptor =
+        buildElementDescriptor(
+          element
+        )
+          .toLowerCase();
+
+
+      if (
+        !/rating|stars?|score|rate/
+          .test(descriptor)
+      ) {
+        continue;
+      }
+
+
+      for (
+        const [word, number]
+        of Object.entries(
+          wordValues
+        )
+      ) {
+
+        const pattern =
+          new RegExp(
+            "(?:^|[\\s_-])" +
+            word +
+            "(?:$|[\\s_-])",
+            "i"
+          );
+
+
+        if (
+          pattern.test(
+            descriptor
+          )
+        ) {
+
+          return String(
+            number
+          );
+
+        }
+
+      }
+
+
+      const numericClassPatterns = [
+
+        /(?:rating|score|stars?)[-_ ]([0-9]+(?:\.[0-9]+)?)/i,
+
+        /(?:rating|score|stars?)[-_ ]?([0-9]+(?:\.[0-9]+)?)$/i
+
+      ];
+
+
+      for (
+        const pattern
+        of numericClassPatterns
+      ) {
+
+        const match =
+          descriptor.match(
+            pattern
+          );
+
+
+        if (!match) {
+          continue;
+        }
+
+
+        const number =
+          Number(
+            match[1]
+          );
+
+
+        if (
+          isReasonableRating(
+            number
+          )
+        ) {
+
+          return formatNumber(
+            number
+          );
+
+        }
+
+      }
+
+    }
+
+
+    /*
+      4. Unicode stars.
+    */
+
+    const textNodes =
+      item.querySelectorAll(
+        "span, p, div, small"
+      );
+
+
+    for (
+      const element
+      of textNodes
+    ) {
+
+      const text =
+        normalizeValue(
+          element.textContent
+        );
+
+
+      const starMatch =
+        text.match(
+          /[★☆]{3,10}/
+        );
+
+
+      if (
+        starMatch
+      ) {
+
+        const group =
+          starMatch[0];
+
+
+        const filled =
+          (
+            group.match(/★/g) ||
+            []
+          ).length;
+
+
+        if (
+          filled > 0
+        ) {
+
+          return String(
+            filled
+          );
+
+        }
+
+      }
+
+
+      const textual =
+        extractRatingFromText(
+          text
+        );
+
+
+      if (
+        textual !== ""
+      ) {
+        return textual;
+      }
+
+    }
+
+
+    /*
+      5. CSS percentage overlay.
+
+      Useful for many visual star widgets.
+      Example:
+      width: 86%
+
+      Interpreted as a five-star component
+      only when rating/star semantics exist.
+    */
+
+    for (
+      const element
+      of ratingElements
+    ) {
+
+      const descriptor =
+        buildElementDescriptor(
+          element
+        );
+
+
+      if (
+        !/rating|star|score|rate/i
+          .test(descriptor)
+      ) {
+        continue;
+      }
+
+
+      const style =
+        element.getAttribute(
+          "style"
+        ) || "";
+
+
+      const match =
+        style.match(
+          /(?:width|max-width)\s*:\s*(\d+(?:\.\d+)?)%/i
+        );
+
+
+      if (
+        match
+      ) {
+
+        const percentage =
+          Number(
+            match[1]
+          );
+
+
+        if (
+          percentage > 0 &&
+          percentage <= 100
+        ) {
+
+          return formatNumber(
+            percentage / 20
+          );
+
+        }
+
+      }
+
+    }
+
+
+    return "";
+
+  }
+
+
+  function extractRatingFromText(
+    value
+  ) {
+
+    const text =
+      normalizeValue(
+        value
+      );
+
+
+    if (
+      !text ||
+      text.length > 120
+    ) {
+      return "";
+    }
+
+
+    const patterns = [
+
+      /(?:rating|rated|score)\s*[:\-]?\s*([0-9]+(?:\.\d+)?)/i,
+
+      /([0-9]+(?:\.\d+)?)\s*out\s+of\s*(?:5|10|100)/i,
+
+      /([0-9]+(?:\.\d+)?)\s*\/\s*(?:5|10|100)/i,
+
+      /([0-9]+(?:\.\d+)?)\s*stars?\b/i,
+
+      /([0-9]+(?:\.\d+)?)\s*★/i
+
+    ];
+
+
+    for (
+      const pattern
+      of patterns
+    ) {
+
+      const match =
+        text.match(
+          pattern
+        );
+
+
+      if (!match) {
+        continue;
+      }
+
+
+      const number =
+        Number(
+          match[1]
+        );
+
+
+      if (
+        isReasonableRating(
+          number
+        )
+      ) {
+
+        return formatNumber(
+          number
+        );
+
+      }
+
+    }
+
+
+    return "";
+
+  }
+
+
+  function buildElementDescriptor(
+    element
+  ) {
+
+    return [
+
+      getClassName(
+        element
+      ),
+
+      element.id,
+
+      element.getAttribute(
+        "itemprop"
+      ),
+
+      element.getAttribute(
+        "aria-label"
+      ),
+
+      element.getAttribute(
+        "title"
+      ),
+
+      element.getAttribute(
+        "data-rating"
+      ),
+
+      element.getAttribute(
+        "data-score"
+      ),
+
+      element.getAttribute(
+        "data-stars"
+      )
+
+    ]
+      .filter(Boolean)
+      .join(" ");
+
+  }
+
+
+  function getClassName(
+    element
+  ) {
+
+    if (
+      typeof element.className ===
+      "string"
+    ) {
+
+      return element.className;
+
+    }
+
+
+    if (
+      element.className &&
+      element.className.baseVal
+    ) {
+
+      return element.className.baseVal;
+
+    }
+
+
+    return (
+      element.getAttribute(
+        "class"
+      ) ||
+      ""
+    );
+
+  }
+
+
+  function firstNumber(
+    value
+  ) {
+
+    const match =
+      String(
+        value ||
+        ""
+      )
+        .match(
+          /-?\d+(?:\.\d+)?/
+        );
+
+
+    if (!match) {
+      return NaN;
+    }
+
+
+    return Number(
+      match[0]
+    );
+
+  }
+
+
+  function isReasonableRating(
+    value
+  ) {
+
+    const number =
+      Number(value);
+
+
+    return (
+      Number.isFinite(number) &&
+      number >= 0 &&
+      number <= 100
+    );
+
+  }
+
+
+  function formatNumber(
+    value
+  ) {
+
+    const number =
+      Number(value);
+
+
+    if (
+      !Number.isFinite(number)
+    ) {
+      return "";
+    }
+
+
+    return String(
+      Math.round(
+        number * 100
+      ) / 100
     );
 
   }
@@ -405,7 +1113,9 @@
   */
 
 
-  function buildRecordMap(item) {
+  function buildRecordMap(
+    item
+  ) {
 
     const map =
       new Map();
@@ -453,9 +1163,7 @@
     if (
       depth > 8
     ) {
-
       return;
-
     }
 
 
@@ -465,67 +1173,65 @@
       );
 
 
-    const tagCounters =
+    const counters =
       {};
 
 
-    children.forEach(
-      function (child) {
+    children.forEach(function (child) {
 
-        if (
-          shouldIgnoreElement(child)
-        ) {
-
-          return;
-
-        }
-
-
-        const tag =
-          child.tagName
-            .toLowerCase();
-
-
-        tagCounters[tag] =
-          (
-            tagCounters[tag] ||
-            0
-          ) + 1;
-
-
-        const part =
-          buildRelativePathPart(
-            child,
-            tagCounters[tag]
-          );
-
-
-        const path =
-          parentPath
-            ? (
-                parentPath +
-                " > " +
-                part
-              )
-            : part;
-
-
-        inspectElement(
-          child,
-          path,
-          map
-        );
-
-
-        walkChildren(
-          child,
-          path,
-          map,
-          depth + 1
-        );
-
+      if (
+        shouldIgnoreElement(
+          child
+        )
+      ) {
+        return;
       }
-    );
+
+
+      const tag =
+        child.tagName
+          .toLowerCase();
+
+
+      counters[tag] =
+        (
+          counters[tag] ||
+          0
+        ) + 1;
+
+
+      const part =
+        buildRelativePathPart(
+          child,
+          counters[tag]
+        );
+
+
+      const path =
+        parentPath
+          ? (
+              parentPath +
+              " > " +
+              part
+            )
+          : part;
+
+
+      inspectElement(
+        child,
+        path,
+        map
+      );
+
+
+      walkChildren(
+        child,
+        path,
+        map,
+        depth + 1
+      );
+
+    });
 
   }
 
@@ -541,112 +1247,23 @@
         element
       )
     ) {
-
       return;
-
     }
 
 
-    const candidateValues = [
-
-      {
-        value:
-          getOwnUsefulText(
-            element
-          ),
-        type:
-          "text"
-      },
-
-      {
-        value:
-          element.getAttribute(
-            "aria-label"
-          ),
-        type:
-          "aria"
-      },
-
-      {
-        value:
-          element.getAttribute(
-            "title"
-          ),
-        type:
-          "title"
-      },
-
-      {
-        value:
-          element.getAttribute(
-            "value"
-          ),
-        type:
-          "value"
-      },
-
-      {
-        value:
-          element.getAttribute(
-            "content"
-          ),
-        type:
-          "content"
-      }
-
-    ];
-
-
-    let selected =
-      null;
-
-
-    for (
-      const candidate
-      of candidateValues
-    ) {
-
-      const value =
-        normalizeValue(
-          candidate.value
-        );
-
-
-      if (
-        value === ""
-      ) {
-
-        continue;
-
-      }
-
-
-      if (
-        isLikelyCode(value)
-      ) {
-
-        continue;
-
-      }
-
-
-      selected = {
-        value: value,
-        type: candidate.type
-      };
-
-
-      break;
-
-    }
+    const selected =
+      chooseBestElementValue(
+        element
+      );
 
 
     if (
-      !selected
+      !selected ||
+      isLikelyCode(
+        selected.value
+      )
     ) {
-
       return;
-
     }
 
 
@@ -681,9 +1298,198 @@
   }
 
 
+  function chooseBestElementValue(
+    element
+  ) {
+
+    const visible =
+      normalizeValue(
+        getOwnUsefulText(
+          element
+        )
+      );
+
+
+    const title =
+      normalizeValue(
+        element.getAttribute(
+          "title"
+        )
+      );
+
+
+    const aria =
+      normalizeValue(
+        element.getAttribute(
+          "aria-label"
+        )
+      );
+
+
+    const content =
+      normalizeValue(
+        element.getAttribute(
+          "content"
+        )
+      );
+
+
+    const value =
+      normalizeValue(
+        element.getAttribute(
+          "value"
+        )
+      );
+
+
+    if (
+      title &&
+      shouldPreferExpandedValue(
+        title,
+        visible
+      )
+    ) {
+
+      return {
+        value: title,
+        type: "title"
+      };
+
+    }
+
+
+    if (
+      aria &&
+      shouldPreferExpandedValue(
+        aria,
+        visible
+      )
+    ) {
+
+      return {
+        value: aria,
+        type: "aria"
+      };
+
+    }
+
+
+    if (visible) {
+
+      return {
+        value: visible,
+        type: "text"
+      };
+
+    }
+
+
+    if (title) {
+
+      return {
+        value: title,
+        type: "title"
+      };
+
+    }
+
+
+    if (aria) {
+
+      return {
+        value: aria,
+        type: "aria"
+      };
+
+    }
+
+
+    if (content) {
+
+      return {
+        value: content,
+        type: "content"
+      };
+
+    }
+
+
+    if (value) {
+
+      return {
+        value: value,
+        type: "value"
+      };
+
+    }
+
+
+    return null;
+
+  }
+
+
+  function shouldPreferExpandedValue(
+    candidate,
+    visible
+  ) {
+
+    if (!candidate) {
+      return false;
+    }
+
+
+    if (!visible) {
+      return true;
+    }
+
+
+    if (
+      candidate === visible ||
+      candidate.length <=
+        visible.length
+    ) {
+      return false;
+    }
+
+
+    const candidateNormalized =
+      normalizeComparable(
+        candidate
+      );
+
+
+    const shortVisible =
+      normalizeComparable(
+        visible
+          .replace(/\.\.\.+$/g, "")
+          .replace(/…+$/g, "")
+      );
+
+
+    if (
+      shortVisible.length >= 3 &&
+      candidateNormalized.startsWith(
+        shortVisible
+      )
+    ) {
+      return true;
+    }
+
+
+    return (
+      shortVisible.length >= 4 &&
+      candidateNormalized.includes(
+        shortVisible
+      )
+    );
+
+  }
+
+
   /*
     ==================================================
-    LINKS
+    LINKS / IMAGES
     ==================================================
   */
 
@@ -693,8 +1499,7 @@
     map
   ) {
 
-    const links =
-      [];
+    const links = [];
 
 
     if (
@@ -702,9 +1507,7 @@
         "a[href]"
       )
     ) {
-
       links.push(item);
-
     }
 
 
@@ -712,21 +1515,16 @@
       .querySelectorAll(
         "a[href]"
       )
-      .forEach(
-        function (link) {
-
-          links.push(link);
-
-        }
-      );
+      .forEach(function (link) {
+        links.push(link);
+      });
 
 
     const seen =
       new Set();
 
 
-    let index =
-      0;
+    let index = 0;
 
 
     for (
@@ -747,9 +1545,7 @@
         !href ||
         seen.has(href)
       ) {
-
         continue;
-
       }
 
 
@@ -775,9 +1571,7 @@
       if (
         index >= 5
       ) {
-
         break;
-
       }
 
     }
@@ -785,52 +1579,33 @@
   }
 
 
-  /*
-    ==================================================
-    IMAGES
-    ==================================================
-  */
-
-
   function addImageFields(
     item,
     map
   ) {
 
-    const images =
-      [];
+    const images = [];
 
 
     if (
-      item.matches(
-        "img"
-      )
+      item.matches("img")
     ) {
-
       images.push(item);
-
     }
 
 
     item
-      .querySelectorAll(
-        "img"
-      )
-      .forEach(
-        function (image) {
-
-          images.push(image);
-
-        }
-      );
+      .querySelectorAll("img")
+      .forEach(function (image) {
+        images.push(image);
+      });
 
 
     const seen =
       new Set();
 
 
-    let index =
-      0;
+    let index = 0;
 
 
     for (
@@ -838,7 +1613,7 @@
       of images
     ) {
 
-      const values = [
+      const candidates = [
 
         image.getAttribute(
           "data-src"
@@ -865,17 +1640,18 @@
       ];
 
 
-      let chosen =
-        "";
+      let chosen = "";
 
 
       for (
-        const value
-        of values
+        const candidate
+        of candidates
       ) {
 
         const url =
-          normalizeURL(value);
+          normalizeURL(
+            candidate
+          );
 
 
         if (
@@ -883,9 +1659,7 @@
           !seen.has(url)
         ) {
 
-          chosen =
-            url;
-
+          chosen = url;
           break;
 
         }
@@ -893,12 +1667,8 @@
       }
 
 
-      if (
-        chosen === ""
-      ) {
-
+      if (!chosen) {
         continue;
-
       }
 
 
@@ -924,9 +1694,7 @@
       if (
         index >= 5
       ) {
-
         break;
-
       }
 
     }
@@ -936,7 +1704,7 @@
 
   /*
     ==================================================
-    SEMANTIC TYPE
+    SEMANTIC TYPE + NAME
     ==================================================
   */
 
@@ -951,9 +1719,7 @@
         "@image:"
       )
     ) {
-
       return "image";
-
     }
 
 
@@ -962,27 +1728,20 @@
         "@link:"
       )
     ) {
-
       return "url";
-
     }
 
 
     const sample =
-      values.slice(
-        0,
-        40
-      );
+      values.slice(0, 40);
 
 
-    const scores = {
-
+    const count = {
       currency: 0,
       savings: 0,
       discount: 0,
       sold: 0,
       reviews: 0,
-      rating: 0,
       location: 0,
       availability: 0,
       action: 0,
@@ -990,187 +1749,114 @@
       duration: 0,
       certificate: 0,
       percentage: 0,
-      number: 0,
-      date: 0,
-      boolean: 0
-
+      number: 0
     };
 
 
-    sample.forEach(
-      function (value) {
-
-        if (
-          containsCurrency(value)
-        ) {
-
-          scores.currency++;
-
-        }
-
-
-        if (
-          /\b(?:save|saving|savings)\b/i
-            .test(value) &&
-          containsCurrency(value)
-        ) {
-
-          scores.savings++;
-
-        }
-
-
-        if (
-          (
-            /\b\d+(?:\.\d+)?\s*%\s*off\b/i
-              .test(value)
-          ) ||
-          (
-            /^-\s*\d+(?:\.\d+)?\s*%/
-              .test(value)
-          )
-        ) {
-
-          scores.discount++;
-
-        }
-
-
-        if (
-          /^\s*[\d,.]+\+?\s*sold\s*$/i
-            .test(value)
-        ) {
-
-          scores.sold++;
-
-        }
-
-
-        if (
-          /^\(\s*[\d,.]+[KkMm]?\s*\)$/
-            .test(value)
-        ) {
-
-          scores.reviews++;
-
-        }
-
-
-        if (
-          /(?:rating|rated)\s*[:\-]?\s*[0-5](?:\.\d+)?/i
-            .test(value) ||
-          /^[0-5](?:\.\d+)?\s*\/\s*5$/
-            .test(value)
-        ) {
-
-          scores.rating++;
-
-        }
-
-
-        if (
-          isLocationLike(value)
-        ) {
-
-          scores.location++;
-
-        }
-
-
-        if (
-          /^(?:in stock|out of stock|available|unavailable|sold out|pre-order|preorder)$/i
-            .test(value)
-        ) {
-
-          scores.availability++;
-
-        }
-
-
-        if (
-          /^(?:add to cart|add to basket|buy now|shop now|view details|read more|watch now|book now)$/i
-            .test(value)
-        ) {
-
-          scores.action++;
-
-        }
-
-
-        if (
-          /^(?:18|19|20|21)\d{2}$/
-            .test(value)
-        ) {
-
-          scores.year++;
-
-        }
-
-
-        if (
-          /^\d+\s*h(?:\s*\d+\s*m)?$/i
-            .test(value) ||
-          /^\d+\s*(?:min|mins|minutes)$/i
-            .test(value)
-        ) {
-
-          scores.duration++;
-
-        }
-
-
-        if (
-          isCertificateLike(value)
-        ) {
-
-          scores.certificate++;
-
-        }
-
-
-        if (
-          /^-?\s*\d+(?:\.\d+)?\s*%/
-            .test(value)
-        ) {
-
-          scores.percentage++;
-
-        }
-
-
-        if (
-          /^-?\d+(?:[,.]\d+)*$/
-            .test(value)
-        ) {
-
-          scores.number++;
-
-        }
-
-
-        if (
-          /^\d{4}-\d{1,2}-\d{1,2}/
-            .test(value) ||
-          /^\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4}$/
-            .test(value)
-        ) {
-
-          scores.date++;
-
-        }
-
-
-        if (
-          /^(?:yes|no|true|false)$/i
-            .test(value)
-        ) {
-
-          scores.boolean++;
-
-        }
-
+    sample.forEach(function (value) {
+
+      if (
+        containsCurrency(value)
+      ) {
+        count.currency++;
       }
-    );
+
+
+      if (
+        /\b(?:save|saving|savings)\b/i
+          .test(value) &&
+        containsCurrency(value)
+      ) {
+        count.savings++;
+      }
+
+
+      if (
+        /\d+(?:\.\d+)?\s*%\s*off/i
+          .test(value)
+      ) {
+        count.discount++;
+      }
+
+
+      if (
+        /^[\d,.]+\+?\s*sold$/i
+          .test(value)
+      ) {
+        count.sold++;
+      }
+
+
+      if (
+        /^\(\s*[\d,.]+[KkMm]?\s*\)$/
+          .test(value)
+      ) {
+        count.reviews++;
+      }
+
+
+      if (
+        isLocationLike(value)
+      ) {
+        count.location++;
+      }
+
+
+      if (
+        /^(?:in stock|out of stock|available|unavailable|sold out|pre-order|preorder)$/i
+          .test(value)
+      ) {
+        count.availability++;
+      }
+
+
+      if (
+        /^(?:add to cart|add to basket|buy now|shop now|view details|read more|watch now|book now)$/i
+          .test(value)
+      ) {
+        count.action++;
+      }
+
+
+      if (
+        /^(?:18|19|20|21)\d{2}$/
+          .test(value)
+      ) {
+        count.year++;
+      }
+
+
+      if (
+        /^\d+\s*h(?:\s*\d+\s*m)?$/i
+          .test(value)
+      ) {
+        count.duration++;
+      }
+
+
+      if (
+        isCertificateLike(value)
+      ) {
+        count.certificate++;
+      }
+
+
+      if (
+        /^-?\d+(?:\.\d+)?\s*%/
+          .test(value)
+      ) {
+        count.percentage++;
+      }
+
+
+      if (
+        /^-?\d+(?:[,.]\d+)*$/
+          .test(value)
+      ) {
+        count.number++;
+      }
+
+    });
 
 
     const total =
@@ -1179,206 +1865,137 @@
 
     if (
       ratio(
-        scores.savings,
+        count.savings,
         total
       ) >= 0.5
     ) {
-
       return "savings";
-
     }
 
 
     if (
       ratio(
-        scores.discount,
+        count.discount,
         total
       ) >= 0.5
     ) {
-
       return "discount";
-
     }
 
 
     if (
       ratio(
-        scores.sold,
+        count.sold,
         total
       ) >= 0.5
     ) {
-
       return "sold";
-
     }
 
 
     if (
       ratio(
-        scores.availability,
+        count.availability,
         total
       ) >= 0.5
     ) {
-
       return "availability";
-
     }
 
 
     if (
       ratio(
-        scores.action,
+        count.action,
         total
       ) >= 0.5
     ) {
-
       return "action";
-
     }
 
 
     if (
       ratio(
-        scores.year,
+        count.year,
         total
       ) >= 0.75
     ) {
-
       return "year";
-
     }
 
 
     if (
       ratio(
-        scores.duration,
+        count.duration,
         total
       ) >= 0.5
     ) {
-
       return "duration";
-
     }
 
 
     if (
       ratio(
-        scores.certificate,
+        count.certificate,
         total
       ) >= 0.6
     ) {
-
       return "certificate";
-
     }
 
 
     if (
       ratio(
-        scores.location,
+        count.location,
         total
       ) >= 0.5
     ) {
-
       return "location";
-
     }
 
 
     if (
       ratio(
-        scores.rating,
-        total
-      ) >= 0.5
-    ) {
-
-      return "rating";
-
-    }
-
-
-    if (
-      ratio(
-        scores.reviews,
+        count.reviews,
         total
       ) >= 0.6
     ) {
-
       return "count";
-
     }
 
 
     if (
       ratio(
-        scores.currency,
+        count.currency,
         total
       ) >= 0.6
     ) {
-
       return "currency";
-
     }
 
 
     if (
       ratio(
-        scores.date,
+        count.percentage,
         total
       ) >= 0.6
     ) {
-
-      return "date";
-
-    }
-
-
-    if (
-      ratio(
-        scores.percentage,
-        total
-      ) >= 0.6
-    ) {
-
       return "percentage";
-
     }
 
 
     if (
       ratio(
-        scores.boolean,
-        total
-      ) >= 0.7
-    ) {
-
-      return "boolean";
-
-    }
-
-
-    if (
-      ratio(
-        scores.number,
+        count.number,
         total
       ) >= 0.75
     ) {
-
       return "number";
-
     }
 
 
     return "text";
 
   }
-
-
-  /*
-    ==================================================
-    FIELD NAME
-    ==================================================
-  */
 
 
   function inferFieldName(
@@ -1401,10 +2018,7 @@
 
       return index === 0
         ? "Link"
-        : (
-            "Link " +
-            (index + 1)
-          );
+        : "Link " + (index + 1);
 
     }
 
@@ -1423,405 +2037,145 @@
 
       return index === 0
         ? "Image URL"
-        : (
-            "Image URL " +
-            (index + 1)
-          );
+        : "Image URL " + (index + 1);
 
     }
 
 
     const descriptor =
-      getFieldDescriptor(field);
-
-
-    /*
-      Strong content-based semantics
-      come before random CSS class names.
-    */
-
-
-    if (
-      semanticType ===
-      "savings"
-    ) {
-
-      return "Savings";
-
-    }
-
-
-    if (
-      semanticType ===
-      "discount"
-    ) {
-
-      return "Discount";
-
-    }
-
-
-    if (
-      semanticType ===
-      "sold"
-    ) {
-
-      return "Sold";
-
-    }
-
-
-    if (
-      semanticType ===
-      "availability"
-    ) {
-
-      return "Availability";
-
-    }
-
-
-    if (
-      semanticType ===
-      "action"
-    ) {
-
-      return "Action";
-
-    }
-
-
-    if (
-      semanticType ===
-      "year"
-    ) {
-
-      return "Year";
-
-    }
-
-
-    if (
-      semanticType ===
-      "duration"
-    ) {
-
-      return "Runtime";
-
-    }
-
-
-    if (
-      semanticType ===
-      "certificate"
-    ) {
-
-      return "Certificate";
-
-    }
-
-
-    if (
-      semanticType ===
-      "location"
-    ) {
-
-      return "Location";
-
-    }
-
-
-    if (
-      semanticType ===
-      "rating"
-    ) {
-
-      return "Rating";
-
-    }
-
-
-    if (
-      semanticType ===
-      "currency"
-    ) {
-
-      if (
-        /old|original|previous|list-price|regular-price|before/i
-          .test(descriptor)
-      ) {
-
-        return "Original Price";
-
-      }
-
-
-      if (
-        /sale|current|discounted|final|offer/i
-          .test(descriptor)
-      ) {
-
-        return "Current Price";
-
-      }
-
-
-      return "Price";
-
-    }
-
-
-    if (
-      semanticType ===
-      "percentage"
-    ) {
-
-      return "Percentage";
-
-    }
-
-
-    if (
-      semanticType ===
-      "date"
-    ) {
-
-      return "Date";
-
-    }
-
-
-    /*
-      Parenthesized counts.
-
-      If the DOM itself suggests reviews
-      or ratings, use Reviews.
-
-      Otherwise remain generic as Count.
-    */
-
-    if (
-      semanticType ===
-      "count"
-    ) {
-
-      if (
-        /review|rating|rate|star/i
-          .test(descriptor)
-      ) {
-
-        return "Reviews";
-
-      }
-
-
-      return "Count";
-
-    }
-
-
-    /*
-      Semantic attributes supplied directly
-      by the website.
-    */
-
-    const semanticAttributes = [
-
-      "itemprop",
-      "data-field",
-      "data-name",
-      "data-label",
-      "name"
-
-    ];
-
-
-    for (
-      const attribute
-      of semanticAttributes
-    ) {
-
-      const attributeValues =
-        field.attributes.get(
-          attribute
-        );
-
-
-      if (
-        !attributeValues ||
-        attributeValues.size === 0
-      ) {
-
-        continue;
-
-      }
-
-
-      const candidate =
-        humanizeName(
-          Array.from(
-            attributeValues
-          )[0]
-        );
-
-
-      if (
-        isUsefulFieldName(
-          candidate
-        )
-      ) {
-
-        return normalizeSemanticName(
-          candidate
-        );
-
-      }
-
-    }
-
-
-    /*
-      ARIA label can contain a useful
-      semantic label, but don't use the
-      complete product value as a header.
-    */
-
-    const ariaValues =
-      field.attributes.get(
-        "aria-label"
+      getFieldDescriptor(
+        field
       );
 
 
     if (
-      ariaValues &&
-      ariaValues.size === 1
+      semanticType === "savings"
     ) {
-
-      const aria =
-        Array.from(
-          ariaValues
-        )[0];
-
-
-      if (
-        aria.length <= 40
-      ) {
-
-        const candidate =
-          humanizeName(
-            aria
-          );
-
-
-        if (
-          isUsefulFieldName(
-            candidate
-          )
-        ) {
-
-          return normalizeSemanticName(
-            candidate
-          );
-
-        }
-
-      }
-
+      return "Savings";
     }
 
 
-    /*
-      Headings are usually a record title.
-    */
+    if (
+      semanticType === "discount"
+    ) {
+      return "Discount";
+    }
+
+
+    if (
+      semanticType === "sold"
+    ) {
+      return "Sold";
+    }
+
+
+    if (
+      semanticType === "availability"
+    ) {
+      return "Availability";
+    }
+
+
+    if (
+      semanticType === "action"
+    ) {
+      return "Action";
+    }
+
+
+    if (
+      semanticType === "year"
+    ) {
+      return "Year";
+    }
+
+
+    if (
+      semanticType === "duration"
+    ) {
+      return "Runtime";
+    }
+
+
+    if (
+      semanticType === "certificate"
+    ) {
+      return "Certificate";
+    }
+
+
+    if (
+      semanticType === "location"
+    ) {
+      return "Location";
+    }
+
+
+    if (
+      semanticType === "currency"
+    ) {
+      return "Price";
+    }
+
+
+    if (
+      semanticType === "count" &&
+      /review|rating|star|rate/i
+        .test(descriptor)
+    ) {
+      return "Reviews";
+    }
+
 
     if (
       Array.from(
         field.tagNames
-      ).some(
-        function (tag) {
+      ).some(function (tag) {
 
-          return /^h[1-6]$/
-            .test(tag);
+        return /^h[1-6]$/
+          .test(tag);
 
-        }
-      )
+      })
     ) {
-
       return "Title";
-
     }
 
 
-    /*
-      Class / DOM semantic keywords.
-    */
-
-    const keywordName =
+    const semanticName =
       inferNameFromDescriptor(
         descriptor
       );
 
 
-    if (
-      keywordName !== ""
-    ) {
-
-      return keywordName;
-
+    if (semanticName) {
+      return semanticName;
     }
 
-
-    /*
-      Anchor text with strong variation is
-      frequently the record's main title:
-      book title, movie title, article title,
-      product title, job title, etc.
-    */
 
     if (
       field.tagNames.has("a") &&
-      valuesLookLikeTitles(values)
+      valuesLookLikeTitles(
+        values
+      )
     ) {
-
       return "Title";
-
     }
 
-
-    /*
-      A highly variable textual field
-      containing substantial text is often
-      the record title even if the site uses
-      meaningless generated class names.
-    */
 
     if (
       semanticType === "text" &&
-      valuesLookLikeTitles(values)
+      valuesLookLikeTitles(
+        values
+      )
     ) {
-
       return "Title";
-
     }
 
 
     if (
-      semanticType ===
-      "number"
+      semanticType === "number"
     ) {
-
       return "Number";
-
-    }
-
-
-    if (
-      semanticType ===
-      "boolean"
-    ) {
-
-      return "Status";
-
     }
 
 
@@ -1834,206 +2188,58 @@
     descriptor
   ) {
 
-    const tests = [
+    const mappings = [
 
-      {
-        regex:
-          /product[-_ ]?(?:title|name)|(?:title|name)[-_ ]?product/i,
-        name:
-          "Product Title"
-      },
+      [/product[-_ ]?(?:title|name)/i, "Product Title"],
 
-      {
-        regex:
-          /movie[-_ ]?(?:title|name)|film[-_ ]?(?:title|name)/i,
-        name:
-          "Movie Title"
-      },
+      [/movie[-_ ]?(?:title|name)/i, "Movie Title"],
 
-      {
-        regex:
-          /book[-_ ]?(?:title|name)/i,
-        name:
-          "Book Title"
-      },
+      [/book[-_ ]?(?:title|name)/i, "Book Title"],
 
-      {
-        regex:
-          /job[-_ ]?(?:title|name)/i,
-        name:
-          "Job Title"
-      },
+      [/job[-_ ]?(?:title|name)/i, "Job Title"],
 
-      {
-        regex:
-          /(?:^|[\s_.-])title(?:$|[\s_.-])/i,
-        name:
-          "Title"
-      },
+      [/(?:^|[\s_.-])title(?:$|[\s_.-])/i, "Title"],
 
-      {
-        regex:
-          /(?:^|[\s_.-])name(?:$|[\s_.-])/i,
-        name:
-          "Name"
-      },
+      [/(?:^|[\s_.-])name(?:$|[\s_.-])/i, "Name"],
 
-      {
-        regex:
-          /discount/i,
-        name:
-          "Discount"
-      },
+      [/discount/i, "Discount"],
 
-      {
-        regex:
-          /(?:^|[-_. ])sold(?:$|[-_. ])/i,
-        name:
-          "Sold"
-      },
+      [/\bsold\b/i, "Sold"],
 
-      {
-        regex:
-          /review/i,
-        name:
-          "Reviews"
-      },
+      [/review/i, "Reviews"],
 
-      {
-        regex:
-          /rating|stars?/i,
-        name:
-          "Rating"
-      },
+      [/availability|instock|in-stock|stock-status/i, "Availability"],
 
-      {
-        regex:
-          /availability|instock|in-stock|stock-status/i,
-        name:
-          "Availability"
-      },
+      [/location|province|region|city|district|state/i, "Location"],
 
-      {
-        regex:
-          /location|province|region|city|district|state/i,
-        name:
-          "Location"
-      },
+      [/brand/i, "Brand"],
 
-      {
-        regex:
-          /brand/i,
-        name:
-          "Brand"
-      },
+      [/category|genre/i, "Category"],
 
-      {
-        regex:
-          /category|genre/i,
-        name:
-          "Category"
-      },
+      [/runtime|duration/i, "Runtime"],
 
-      {
-        regex:
-          /runtime|duration|length/i,
-        name:
-          "Runtime"
-      },
+      [/certificate|content-rating|age-rating/i, "Certificate"],
 
-      {
-        regex:
-          /certificate|content-rating|age-rating/i,
-        name:
-          "Certificate"
-      },
+      [/\byear\b/i, "Year"],
 
-      {
-        regex:
-          /year/i,
-        name:
-          "Year"
-      },
+      [/delivery|shipping/i, "Delivery"],
 
-      {
-        regex:
-          /author/i,
-        name:
-          "Author"
-      },
-
-      {
-        regex:
-          /director/i,
-        name:
-          "Director"
-      },
-
-      {
-        regex:
-          /company/i,
-        name:
-          "Company"
-      },
-
-      {
-        regex:
-          /salary/i,
-        name:
-          "Salary"
-      },
-
-      {
-        regex:
-          /delivery|shipping/i,
-        name:
-          "Delivery"
-      },
-
-      {
-        regex:
-          /badge/i,
-        name:
-          "Badge"
-      },
-
-      {
-        regex:
-          /description|summary/i,
-        name:
-          "Description"
-      },
-
-      {
-        regex:
-          /(?:price.*color|color.*price)/i,
-        name:
-          "Price"
-      },
-
-      {
-        regex:
-          /(?:^|[-_. ])price(?:$|[-_. ])/i,
-        name:
-          "Price"
-      }
+      [/price/i, "Price"]
 
     ];
 
 
     for (
-      const test
-      of tests
+      const [regex, name]
+      of mappings
     ) {
 
       if (
-        test.regex.test(
+        regex.test(
           descriptor
         )
       ) {
-
-        return test.name;
-
+        return name;
       }
 
     }
@@ -2046,7 +2252,108 @@
 
   /*
     ==================================================
-    AGGREGATE FIELD REMOVAL
+    ORDER
+    ==================================================
+  */
+
+
+  function compareFieldsForExport(
+    a,
+    b
+  ) {
+
+    const first =
+      getExportPriority(a);
+
+
+    const second =
+      getExportPriority(b);
+
+
+    if (
+      first !== second
+    ) {
+      return first - second;
+    }
+
+
+    return (
+      b.score -
+      a.score
+    );
+
+  }
+
+
+  function getExportPriority(
+    field
+  ) {
+
+    const name =
+      normalizeFieldName(
+        field.name
+      );
+
+
+    if (
+      /^(?:product title|movie title|book title|job title|title|name)$/
+        .test(name)
+    ) {
+      return 0;
+    }
+
+
+    if (
+      name === "price"
+    ) {
+      return 10;
+    }
+
+
+    if (
+      name === "rating"
+    ) {
+      return 15;
+    }
+
+
+    if (
+      /^(?:discount|savings|reviews|sold|year|runtime|certificate|category|brand|availability|location|delivery|date|status|number)$/
+        .test(name)
+    ) {
+      return 20;
+    }
+
+
+    if (
+      name === "action"
+    ) {
+      return 60;
+    }
+
+
+    if (
+      field.type === "url"
+    ) {
+      return 90;
+    }
+
+
+    if (
+      field.type === "image"
+    ) {
+      return 100;
+    }
+
+
+    return 40;
+
+  }
+
+
+  /*
+    ==================================================
+    DUPLICATE CLEANUP
     ==================================================
   */
 
@@ -2056,191 +2363,132 @@
     totalRecords
   ) {
 
-    return fields.filter(
-      function (field) {
+    return fields.filter(function (field) {
 
-        if (
-          field.path.startsWith("@")
-        ) {
-
-          return true;
-
-        }
+      if (
+        field.path.startsWith("@")
+      ) {
+        return true;
+      }
 
 
-        const children =
-          fields.filter(
-            function (candidate) {
+      const children =
+        fields.filter(function (candidate) {
 
-              return (
-                candidate !== field &&
-                isDescendantPath(
-                  field.path,
-                  candidate.path
-                ) &&
-                !candidate.path.startsWith("@")
-              );
+          return (
+            candidate !== field &&
+            isDescendantPath(
+              field.path,
+              candidate.path
+            ) &&
+            !candidate.path.startsWith("@")
+          );
 
-            }
+        });
+
+
+      if (
+        children.length < 2
+      ) {
+        return true;
+      }
+
+
+      let checked = 0;
+      let matches = 0;
+
+
+      for (
+        let index = 0;
+        index < totalRecords;
+        index++
+      ) {
+
+        const parent =
+          normalizeComparable(
+            field
+              ._valuesByRecord
+              .get(index)
           );
 
 
         if (
-          children.length < 2
+          parent.length < 10
         ) {
-
-          return true;
-
+          continue;
         }
 
 
-        let recordsChecked =
-          0;
-
-        let aggregateMatches =
-          0;
+        checked++;
 
 
-        for (
-          let recordIndex = 0;
-          recordIndex < totalRecords;
-          recordIndex++
-        ) {
+        let contained = 0;
 
-          const parentValue =
+
+        children.forEach(function (child) {
+
+          const value =
             normalizeComparable(
-              field
+              child
                 ._valuesByRecord
-                .get(recordIndex)
+                .get(index)
             );
 
 
           if (
-            parentValue.length < 10
+            value &&
+            value !== parent &&
+            parent.includes(value)
           ) {
-
-            continue;
-
+            contained++;
           }
 
-
-          recordsChecked++;
-
-
-          let containedChildren =
-            0;
-
-
-          for (
-            const child
-            of children
-          ) {
-
-            const childValue =
-              normalizeComparable(
-                child
-                  ._valuesByRecord
-                  .get(recordIndex)
-              );
-
-
-            if (
-              childValue.length < 2
-            ) {
-
-              continue;
-
-            }
-
-
-            if (
-              childValue ===
-              parentValue
-            ) {
-
-              continue;
-
-            }
-
-
-            if (
-              parentValue.includes(
-                childValue
-              )
-            ) {
-
-              containedChildren++;
-
-            }
-
-          }
-
-
-          if (
-            containedChildren >= 2
-          ) {
-
-            aggregateMatches++;
-
-          }
-
-        }
+        });
 
 
         if (
-          recordsChecked === 0
+          contained >= 2
         ) {
-
-          return true;
-
+          matches++;
         }
 
-
-        const ratio =
-          aggregateMatches /
-          recordsChecked;
-
-
-        /*
-          Parent is mostly just a concatenated
-          representation of useful children.
-        */
-
-        return ratio < 0.6;
-
       }
-    );
+
+
+      if (
+        checked === 0
+      ) {
+        return true;
+      }
+
+
+      return (
+        matches /
+        checked
+      ) < 0.6;
+
+    });
 
   }
-
-
-  /*
-    ==================================================
-    DUPLICATE FIELD REMOVAL
-    ==================================================
-  */
 
 
   function removeEquivalentFields(
     fields
   ) {
 
+    const output = [];
+
+
     const sorted =
       [...fields]
-        .sort(
-          function (a, b) {
+        .sort(function (a, b) {
 
-            return (
-              fieldQualityScore(b) -
-              fieldQualityScore(a)
-            );
+          return (
+            fieldQualityScore(b) -
+            fieldQualityScore(a)
+          );
 
-          }
-        );
-
-
-    const result =
-      [];
+        });
 
 
     for (
@@ -2248,48 +2496,27 @@
       of sorted
     ) {
 
-      let duplicate =
-        false;
+      const duplicate =
+        output.some(function (existing) {
 
-
-      for (
-        const existing
-        of result
-      ) {
-
-        const equality =
-          fieldEqualityRatio(
-            field,
-            existing
+          return (
+            fieldEqualityRatio(
+              field,
+              existing
+            ) >= 0.85
           );
 
-
-        if (
-          equality >= 0.85
-        ) {
-
-          duplicate =
-            true;
-
-          break;
-
-        }
-
-      }
+        });
 
 
-      if (
-        !duplicate
-      ) {
-
-        result.push(field);
-
+      if (!duplicate) {
+        output.push(field);
       }
 
     }
 
 
-    return result;
+    return output;
 
   }
 
@@ -2313,70 +2540,51 @@
       ]);
 
 
-    let comparable =
-      0;
-
-    let equal =
-      0;
+    let compared = 0;
+    let equal = 0;
 
 
-    indexes.forEach(
-      function (index) {
+    indexes.forEach(function (index) {
 
-        const a =
-          normalizeComparable(
-            first
-              ._valuesByRecord
-              .get(index)
-          );
-
-
-        const b =
-          normalizeComparable(
-            second
-              ._valuesByRecord
-              .get(index)
-          );
+      const a =
+        normalizeComparable(
+          first
+            ._valuesByRecord
+            .get(index)
+        );
 
 
-        if (
-          a === "" ||
-          b === ""
-        ) {
-
-          return;
-
-        }
+      const b =
+        normalizeComparable(
+          second
+            ._valuesByRecord
+            .get(index)
+        );
 
 
-        comparable++;
-
-
-        if (
-          a === b
-        ) {
-
-          equal++;
-
-        }
-
+      if (
+        !a ||
+        !b
+      ) {
+        return;
       }
-    );
 
 
-    if (
-      comparable === 0
-    ) {
-
-      return 0;
-
-    }
+      compared++;
 
 
-    return (
-      equal /
-      comparable
-    );
+      if (
+        a === b
+      ) {
+        equal++;
+      }
+
+    });
+
+
+    return compared
+      ? equal / compared
+      : 0;
 
   }
 
@@ -2385,133 +2593,60 @@
     field
   ) {
 
-    let score =
-      field.score;
-
-
-    if (
-      field.path.startsWith("@link:")
-    ) {
-
-      score += 100;
-
-    }
-
-
-    if (
-      field.path.startsWith("@image:")
-    ) {
-
-      score += 100;
-
-    }
-
-
-    if (
-      field.name !== "Field" &&
-      field.name !== "Number"
-    ) {
-
-      score += 30;
-
-    }
-
-
-    score +=
+    return (
+      Number(
+        field.score || 0
+      ) +
+      (
+        field.name !== "Field"
+          ? 30
+          : 0
+      ) +
       pathDepth(
         field.path
-      ) * 2;
-
-
-    return score;
+      ) * 2
+    );
 
   }
 
 
-  /*
-    ==================================================
-    SCORING
-    ==================================================
-  */
-
-
   function calculateFieldScore(
     field,
-    presenceRatio,
-    variationRatio,
-    semanticType,
+    presence,
+    variation,
+    type,
     name
   ) {
 
     let score =
-      0;
-
-
-    score +=
-      presenceRatio *
-      100;
+      presence * 100;
 
 
     score +=
       Math.min(
-        variationRatio,
+        variation,
         1
-      ) *
-      25;
+      ) * 25;
 
 
     if (
-      semanticType !==
-      "text"
+      type !== "text"
     ) {
-
       score += 30;
-
     }
 
 
     if (
-      name !== "Field" &&
-      name !== "Number"
+      name !== "Field"
     ) {
-
       score += 25;
-
     }
 
 
     if (
-      field.path.startsWith(
-        "@link:"
-      ) ||
-      field.path.startsWith(
-        "@image:"
-      )
+      field.path.startsWith("@")
     ) {
-
       score += 40;
-
-    }
-
-
-    if (
-      field.tagNames.has("h1") ||
-      field.tagNames.has("h2") ||
-      field.tagNames.has("h3") ||
-      field.tagNames.has("h4")
-    ) {
-
-      score += 30;
-
-    }
-
-
-    if (
-      field.tagNames.has("a")
-    ) {
-
-      score += 10;
-
     }
 
 
@@ -2524,7 +2659,7 @@
 
   /*
     ==================================================
-    ELEMENT FILTERING
+    GENERAL HELPERS
     ==================================================
   */
 
@@ -2533,26 +2668,23 @@
     element
   ) {
 
-    const ignored =
-      new Set([
+    return new Set([
 
-        "script",
-        "style",
-        "noscript",
-        "template",
-        "meta",
-        "link",
-        "head",
-        "svg",
-        "path"
+      "script",
+      "style",
+      "noscript",
+      "template",
+      "meta",
+      "link",
+      "head",
+      "svg",
+      "path"
 
-      ]);
-
-
-    return ignored.has(
-      element.tagName
-        .toLowerCase()
-    );
+    ])
+      .has(
+        element.tagName
+          .toLowerCase()
+      );
 
   }
 
@@ -2566,9 +2698,7 @@
         element
       )
     ) {
-
       return false;
-
     }
 
 
@@ -2576,34 +2706,18 @@
       Array.from(
         element.children
       )
-        .filter(
-          function (child) {
+        .filter(function (child) {
 
-            return !shouldIgnoreElement(
-              child
-            );
+          return !shouldIgnoreElement(
+            child
+          );
 
-          }
-        );
+        });
 
 
-    /*
-      Still allow small containers.
-
-      Large parent containers are the main
-      source of combined duplicate text.
-    */
-
-    if (
-      children.length > 5
-    ) {
-
-      return false;
-
-    }
-
-
-    return true;
+    return (
+      children.length <= 5
+    );
 
   }
 
@@ -2612,47 +2726,33 @@
     element
   ) {
 
-    let direct =
-      "";
+    let text = "";
 
 
-    element.childNodes.forEach(
-      function (node) {
+    element.childNodes.forEach(function (node) {
 
-        if (
-          node.nodeType ===
-          Node.TEXT_NODE
-        ) {
+      if (
+        node.nodeType ===
+        Node.TEXT_NODE
+      ) {
 
-          direct +=
-            " " +
-            node.textContent;
-
-        }
+        text +=
+          " " +
+          node.textContent;
 
       }
-    );
+
+    });
 
 
-    direct =
-      normalizeValue(
-        direct
-      );
+    text =
+      normalizeValue(text);
 
 
-    if (
-      direct !== ""
-    ) {
-
-      return direct;
-
+    if (text) {
+      return text;
     }
 
-
-    /*
-      Near-leaf nodes can safely use their
-      complete visible text.
-    */
 
     if (
       element.children.length <= 1
@@ -2670,38 +2770,28 @@
   }
 
 
-  /*
-    ==================================================
-    ATTRIBUTES
-    ==================================================
-  */
-
-
   function collectUsefulAttributes(
     element
   ) {
 
-    const result =
+    const map =
       new Map();
 
 
-    const allowed = [
+    [
 
       "itemprop",
       "name",
       "aria-label",
+      "title",
       "data-field",
       "data-name",
       "data-label",
       "role",
-      "data-testid",
-      "data-test-id"
+      "data-testid"
 
-    ];
-
-
-    allowed.forEach(
-      function (attribute) {
+    ]
+      .forEach(function (attribute) {
 
         const value =
           element.getAttribute(
@@ -2709,31 +2799,21 @@
           );
 
 
-        if (
-          value
-        ) {
+        if (value) {
 
-          result.set(
+          map.set(
             attribute,
             value
           );
 
         }
 
-      }
-    );
+      });
 
 
-    return result;
+    return map;
 
   }
-
-
-  /*
-    ==================================================
-    PATH
-    ==================================================
-  */
 
 
   function buildRelativePathPart(
@@ -2741,75 +2821,149 @@
     index
   ) {
 
-    const tag =
+    let part =
       element.tagName
         .toLowerCase();
 
 
-    const classes =
-      Array.from(
-        element.classList ||
-        []
-      )
-        .filter(
-          function (className) {
+    Array.from(
+      element.classList ||
+      []
+    )
+      .filter(function (name) {
 
-            return (
-              className.length <= 60 &&
-              !/\d{5,}/
-                .test(
-                  className
-                )
-            );
-
-          }
-        )
-        .slice(
-          0,
-          3
+        return (
+          name.length <= 60 &&
+          !/\d{5,}/
+            .test(name)
         );
 
+      })
+      .slice(0, 3)
+      .forEach(function (name) {
 
-    let result =
-      tag;
-
-
-    classes.forEach(
-      function (className) {
-
-        result +=
+        part +=
           "." +
-          escapePathClass(
-            className
+          name.replace(
+            /[^a-zA-Z0-9_-]/g,
+            "_"
           );
 
-      }
-    );
+      });
 
 
-    result +=
+    return (
+      part +
       ":nth-of-type(" +
       index +
-      ")";
-
-
-    return result;
+      ")"
+    );
 
   }
 
 
-  function escapePathClass(
-    className
+  function getFieldDescriptor(
+    field
   ) {
 
-    return String(
-      className
-    )
-      .replace(
-        /[^a-zA-Z0-9_-]/g,
-        "_"
-      );
+    const parts = [
+      field.path
+    ];
 
+
+    field.classes.forEach(function (value) {
+      parts.push(value);
+    });
+
+
+    field.attributes.forEach(function (values, name) {
+
+      parts.push(name);
+
+
+      values.forEach(function (value) {
+        parts.push(value);
+      });
+
+    });
+
+
+    return parts
+      .join(" ")
+      .toLowerCase();
+
+  }
+
+
+  function valuesLookLikeTitles(
+    values
+  ) {
+
+    const sample =
+      values.slice(0, 30);
+
+
+    if (
+      sample.length < 2
+    ) {
+      return false;
+    }
+
+
+    const usable =
+      sample.filter(function (value) {
+
+        return (
+          value.length >= 3 &&
+          value.length <= 300 &&
+          !containsCurrency(value) &&
+          !/^-?\d+(?:[,.]\d+)*$/
+            .test(value) &&
+          !/^(?:in stock|out of stock|add to basket|add to cart|buy now)$/i
+            .test(value)
+        );
+
+      });
+
+
+    return (
+      usable.length /
+      sample.length >= 0.75
+    );
+
+  }
+
+
+  function containsCurrency(
+    value
+  ) {
+
+    return /(?:rs\.?|npr|₨|रू|रु|₹|\$|€|£|¥)\s*\d/i
+      .test(value);
+
+  }
+
+
+  function isLocationLike(
+    value
+  ) {
+
+    return (
+      /\b(?:province|district|state|region|municipality|city|county)\b/i
+        .test(value) ||
+      /^(?:overseas|international|local)$/i
+        .test(value)
+    );
+
+  }
+
+
+  function isCertificateLike(
+    value
+  ) {
+
+    return /^(?:G|PG|PG-13|R|NC-17|TV-Y|TV-Y7|TV-G|TV-PG|TV-14|TV-MA|U|UA|U\/A|A|12A|15|18)$/i
+      .test(value);
   }
 
 
@@ -2831,8 +2985,7 @@
 
 
     return child.startsWith(
-      parent +
-      " > "
+      parent + " > "
     );
 
   }
@@ -2842,420 +2995,36 @@
     path
   ) {
 
-    if (
-      path.startsWith("@")
-    ) {
-
-      return 1;
-
-    }
-
-
-    return path
-      .split(" > ")
-      .length;
+    return path.startsWith("@")
+      ? 1
+      : path.split(" > ").length;
 
   }
 
 
-  /*
-    ==================================================
-    DESCRIPTORS / NAMING
-    ==================================================
-  */
-
-
-  function getFieldDescriptor(
-    field
-  ) {
-
-    const parts = [
-
-      field.path
-
-    ];
-
-
-    field.classes.forEach(
-      function (className) {
-
-        parts.push(
-          className
-        );
-
-      }
-    );
-
-
-    field.attributes.forEach(
-      function (
-        values,
-        name
-      ) {
-
-        parts.push(
-          name
-        );
-
-
-        values.forEach(
-          function (value) {
-
-            parts.push(
-              value
-            );
-
-          }
-        );
-
-      }
-    );
-
-
-    return parts
-      .join(" ")
-      .toLowerCase();
-
-  }
-
-
-  function normalizeSemanticName(
-    value
-  ) {
-
-    const lower =
-      value.toLowerCase();
-
-
-    if (
-      /price/.test(lower)
-    ) {
-
-      return "Price";
-
-    }
-
-
-    if (
-      /title|product name|movie name|book name/
-        .test(lower)
-    ) {
-
-      return "Title";
-
-    }
-
-
-    if (
-      /review/.test(lower)
-    ) {
-
-      return "Reviews";
-
-    }
-
-
-    if (
-      /rating|stars?/
-        .test(lower)
-    ) {
-
-      return "Rating";
-
-    }
-
-
-    if (
-      /discount/.test(lower)
-    ) {
-
-      return "Discount";
-
-    }
-
-
-    if (
-      /sold/.test(lower)
-    ) {
-
-      return "Sold";
-
-    }
-
-
-    return value;
-
-  }
-
-
-  function humanizeName(
+  function normalizeFieldName(
     value
   ) {
 
     return String(
-      value
+      value || ""
     )
-      .replace(
-        /([a-z])([A-Z])/g,
-        "$1 $2"
-      )
-      .replace(
-        /[_-]+/g,
-        " "
-      )
-      .replace(
-        /\s+/g,
-        " "
-      )
       .trim()
+      .toLowerCase()
       .replace(
-        /\b\w/g,
-        function (letter) {
-
-          return letter
-            .toUpperCase();
-
-        }
+        /\s+\d+$/,
+        ""
       );
 
   }
-
-
-  function isUsefulFieldName(
-    value
-  ) {
-
-    if (
-      !value ||
-      value.length < 2 ||
-      value.length > 60
-    ) {
-
-      return false;
-
-    }
-
-
-    if (
-      /^(?:div|span|p|a|li|field|content|container|wrapper|box|row|column)$/i
-        .test(value)
-    ) {
-
-      return false;
-
-    }
-
-
-    return true;
-
-  }
-
-
-  /*
-    ==================================================
-    CONTENT INFERENCE
-    ==================================================
-  */
-
-
-  function containsCurrency(
-    value
-  ) {
-
-    return (
-
-      /(?:rs\.?|npr|₨|रू|रु|₹|\$|€|£|¥)\s*\d/i
-        .test(value) ||
-
-      /\d[\d,.]*\s*(?:npr|rs\.?|usd|eur|inr|gbp)/i
-        .test(value)
-
-    );
-
-  }
-
-
-  function isLocationLike(
-    value
-  ) {
-
-    if (
-      /\b(?:province|district|state|region|municipality|city|county)\b/i
-        .test(value)
-    ) {
-
-      return true;
-
-    }
-
-
-    if (
-      /^(?:overseas|international|local)$/i
-        .test(value)
-    ) {
-
-      return true;
-
-    }
-
-
-    return false;
-
-  }
-
-
-  function isCertificateLike(
-    value
-  ) {
-
-    return /^(?:G|PG|PG-13|R|NC-17|TV-Y|TV-Y7|TV-G|TV-PG|TV-14|TV-MA|U|UA|U\/A|A|12A|15|18)$/i
-      .test(
-        value.trim()
-      );
-
-  }
-
-
-  function valuesLookLikeTitles(
-    values
-  ) {
-
-    if (
-      values.length < 2
-    ) {
-
-      return false;
-
-    }
-
-
-    const sample =
-      values.slice(
-        0,
-        30
-      );
-
-
-    const unique =
-      new Set(
-        sample
-      );
-
-
-    const variation =
-      unique.size /
-      sample.length;
-
-
-    if (
-      variation < 0.6
-    ) {
-
-      return false;
-
-    }
-
-
-    const suitable =
-      sample.filter(
-        function (value) {
-
-          if (
-            value.length < 3 ||
-            value.length > 300
-          ) {
-
-            return false;
-
-          }
-
-
-          if (
-            containsCurrency(value)
-          ) {
-
-            return false;
-
-          }
-
-
-          if (
-            /^-?\d+(?:[,.]\d+)*$/
-              .test(value)
-          ) {
-
-            return false;
-
-          }
-
-
-          if (
-            /^\(\s*\d+\s*\)$/
-              .test(value)
-          ) {
-
-            return false;
-
-          }
-
-
-          if (
-            /^\d+\s*h(?:\s*\d+\s*m)?$/i
-              .test(value)
-          ) {
-
-            return false;
-
-          }
-
-
-          if (
-            /^(?:in stock|out of stock|add to basket|add to cart|buy now)$/i
-              .test(value)
-          ) {
-
-            return false;
-
-          }
-
-
-          return true;
-
-        }
-      );
-
-
-    return (
-      suitable.length /
-      sample.length >= 0.75
-    );
-
-  }
-
-
-  /*
-    ==================================================
-    HELPERS
-    ==================================================
-  */
 
 
   function normalizeValue(
     value
   ) {
 
-    if (
-      value === null ||
-      value === undefined
-    ) {
-
-      return "";
-
-    }
-
-
     return String(
-      value
+      value ?? ""
     )
       .replace(
         /\u00a0/g,
@@ -3277,11 +3046,7 @@
     return normalizeValue(
       value
     )
-      .toLowerCase()
-      .replace(
-        /\s+/g,
-        " "
-      );
+      .toLowerCase();
 
   }
 
@@ -3290,50 +3055,38 @@
     value
   ) {
 
-    if (
-      !value
-    ) {
-
+    if (!value) {
       return "";
-
     }
-
-
-    let result =
-      String(
-        value
-      ).trim();
 
 
     if (
       /^data:|^blob:|^javascript:/i
-        .test(result)
+        .test(value)
     ) {
-
       return "";
-
     }
 
 
     try {
 
-      result =
+      const url =
         new URL(
-          result,
+          value,
           window.location.href
         ).href;
+
+
+      return /^https?:\/\//i
+        .test(url)
+        ? url
+        : "";
 
     } catch (error) {
 
       return "";
 
     }
-
-
-    return /^https?:\/\//i
-      .test(result)
-      ? result
-      : "";
 
   }
 
@@ -3345,47 +3098,31 @@
     if (
       value.length > 1000
     ) {
-
       return true;
-
     }
 
 
     const patterns = [
 
       /function\s*\(/,
-
       /=>\s*{/,
-
-      /\bwindow\.[a-zA-Z_$]/,
-
-      /\bdocument\.[a-zA-Z_$]/,
-
-      /\bvar\s+[a-zA-Z_$]/,
-
-      /\bconst\s+[a-zA-Z_$]/,
-
-      /\blet\s+[a-zA-Z_$]/,
-
-      /\{\s*["'][a-zA-Z0-9_$-]+["']\s*:/
+      /\bwindow\./,
+      /\bdocument\./,
+      /\bconst\s+/,
+      /\blet\s+/,
+      /\bvar\s+/
 
     ];
 
 
-    const matches =
-      patterns.filter(
-        function (pattern) {
-
-          return pattern.test(
-            value
-          );
-
-        }
-      ).length;
-
-
     return (
-      matches >= 2
+      patterns.filter(function (pattern) {
+
+        return pattern.test(
+          value
+        );
+
+      }).length >= 2
     );
 
   }
@@ -3396,19 +3133,9 @@
     total
   ) {
 
-    if (
-      total <= 0
-    ) {
-
-      return 0;
-
-    }
-
-
-    return (
-      value /
-      total
-    );
+    return total
+      ? value / total
+      : 0;
 
   }
 
@@ -3417,8 +3144,7 @@
     path
   ) {
 
-    let hash =
-      0;
+    let hash = 0;
 
 
     for (

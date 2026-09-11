@@ -5,10 +5,7 @@
 
 
   globalThis.Sankalan.recordExtractor = {
-
-    extract:
-      extractRecords
-
+    extract: extractRecords
   };
 
 
@@ -19,18 +16,7 @@
 
     if (
       !Array.isArray(items) ||
-      items.length === 0
-    ) {
-
-      return {
-        headers: [],
-        rows: []
-      };
-
-    }
-
-
-    if (
+      items.length === 0 ||
       !Array.isArray(fields) ||
       fields.length === 0
     ) {
@@ -43,13 +29,26 @@
     }
 
 
-    const headers =
-      makeUniqueHeaders(
+    let selectedFields =
+      selectBestSemanticFields(
         fields
       );
 
 
-    const rows =
+    selectedFields =
+      removeRatingDuplicateNumberFields(
+        items,
+        selectedFields
+      );
+
+
+    let headers =
+      makeUniqueHeaders(
+        selectedFields
+      );
+
+
+    let rows =
       items.map(
         function (item) {
 
@@ -59,13 +58,79 @@
             );
 
 
-          return fields.map(
+          return selectedFields.map(
             function (field) {
 
-              return extractFieldValue(
+              let rawValue;
+
+
+              if (
+                normalizeFieldName(
+                  field.name
+                ) === "rating" &&
+                globalThis.Sankalan
+                  ?.ratingExtractor
+              ) {
+
+                try {
+
+                  rawValue =
+                    globalThis.Sankalan
+                      .ratingExtractor
+                      .extract(
+                        item
+                      )
+                      ?.rating ||
+                    "";
+
+                } catch (error) {
+
+                  rawValue =
+                    "";
+
+                }
+
+              } else if (
+                normalizeFieldName(
+                  field.name
+                ) === "reviews" &&
+                globalThis.Sankalan
+                  ?.ratingExtractor
+              ) {
+
+                try {
+
+                  rawValue =
+                    globalThis.Sankalan
+                      .ratingExtractor
+                      .extract(
+                        item
+                      )
+                      ?.reviews ||
+                    "";
+
+                } catch (error) {
+
+                  rawValue =
+                    "";
+
+                }
+
+              } else {
+
+                rawValue =
+                  extractFieldValue(
+                    field,
+                    recordMap,
+                    item
+                  );
+
+              }
+
+
+              return validateSemanticValue(
                 field,
-                recordMap,
-                item
+                rawValue
               );
 
             }
@@ -75,17 +140,1220 @@
       );
 
 
+    /*
+      Remove fields that are completely empty
+      across every extracted record.
+
+      Example:
+      Link 2 may be discovered structurally,
+      but after URL deduplication every row may
+      contain an empty value.
+
+      Such a column should not be exported.
+    */
+
+    const cleaned =
+      removeCompletelyEmptyColumns(
+        headers,
+        rows
+      );
+
+
+    headers =
+      cleaned.headers;
+
+
+    rows =
+      cleaned.rows;
+
+
+    return {
+      headers: headers,
+      rows: rows
+    };
+
+  }
+
+
+  /*
+    ==================================================
+    REMOVE EMPTY COLUMNS
+    ==================================================
+  */
+
+
+  function removeCompletelyEmptyColumns(
+    headers,
+    rows
+  ) {
+
+    if (
+      !Array.isArray(headers) ||
+      headers.length === 0
+    ) {
+
+      return {
+        headers: [],
+        rows: rows || []
+      };
+
+    }
+
+
+    const keepIndexes =
+      [];
+
+
+    headers.forEach(
+      function (
+        header,
+        columnIndex
+      ) {
+
+        const hasAnyValue =
+          rows.some(
+            function (row) {
+
+              return (
+                normalizeValue(
+                  row[
+                    columnIndex
+                  ]
+                ) !== ""
+              );
+
+            }
+          );
+
+
+        if (
+          hasAnyValue
+        ) {
+
+          keepIndexes.push(
+            columnIndex
+          );
+
+        }
+
+      }
+    );
+
+
     return {
 
       headers:
-        headers,
+        keepIndexes.map(
+          function (index) {
+
+            return headers[
+              index
+            ];
+
+          }
+        ),
 
       rows:
-        rows
+        rows.map(
+          function (row) {
+
+            return keepIndexes.map(
+              function (index) {
+
+                return row[
+                  index
+                ] ?? "";
+
+              }
+            );
+
+          }
+        )
 
     };
 
   }
+
+
+  /*
+    ==================================================
+    REMOVE GENERIC NUMBER IF IT DUPLICATES RATING
+    ==================================================
+  */
+
+
+  function removeRatingDuplicateNumberFields(
+    items,
+    fields
+  ) {
+
+    if (
+      !globalThis.Sankalan
+        ?.ratingExtractor
+    ) {
+      return fields;
+    }
+
+
+    const ratingValues =
+      items.map(
+        function (item) {
+
+          try {
+
+            return normalizeNumeric(
+              globalThis.Sankalan
+                .ratingExtractor
+                .extract(
+                  item
+                )
+                ?.rating
+            );
+
+          } catch (error) {
+
+            return "";
+
+          }
+
+        }
+      );
+
+
+    const usableRatings =
+      ratingValues
+        .filter(Boolean)
+        .length;
+
+
+    if (
+      usableRatings <
+      Math.max(
+        2,
+        Math.ceil(
+          items.length *
+          0.15
+        )
+      )
+    ) {
+      return fields;
+    }
+
+
+    return fields.filter(
+      function (field) {
+
+        if (
+          normalizeFieldName(
+            field.name
+          ) !== "number"
+        ) {
+          return true;
+        }
+
+
+        let compared =
+          0;
+
+        let equal =
+          0;
+
+
+        for (
+          let index = 0;
+          index < items.length;
+          index++
+        ) {
+
+          const rating =
+            ratingValues[
+              index
+            ];
+
+
+          if (!rating) {
+            continue;
+          }
+
+
+          const recordMap =
+            buildRecordMap(
+              items[
+                index
+              ]
+            );
+
+
+          const value =
+            normalizeNumeric(
+              extractFieldValue(
+                field,
+                recordMap,
+                items[
+                  index
+                ]
+              )
+            );
+
+
+          if (!value) {
+            continue;
+          }
+
+
+          compared++;
+
+
+          if (
+            value === rating
+          ) {
+            equal++;
+          }
+
+        }
+
+
+        if (
+          compared < 2
+        ) {
+          return true;
+        }
+
+
+        return (
+          equal /
+          compared
+        ) < 0.75;
+
+      }
+    );
+
+  }
+
+
+  /*
+    ==================================================
+    SEMANTIC VALUE VALIDATION
+    ==================================================
+  */
+
+
+  function validateSemanticValue(
+    field,
+    value
+  ) {
+
+    let text =
+      normalizeValue(
+        value
+      );
+
+
+    if (!text) {
+      return "";
+    }
+
+
+    const name =
+      normalizeFieldName(
+        field.name
+      );
+
+
+    if (
+      isIdentityFieldName(
+        name
+      )
+    ) {
+
+      return cleanIdentityValue(
+        text
+      );
+
+    }
+
+
+    if (
+      name === "discount"
+    ) {
+
+      return isValidDiscount(
+        text
+      )
+        ? text
+        : "";
+
+    }
+
+
+    if (
+      name === "savings"
+    ) {
+
+      return isValidSavings(
+        text
+      )
+        ? text
+        : "";
+
+    }
+
+
+    if (
+      name === "sold"
+    ) {
+
+      return /^[\d,.]+(?:[KkMm])?\+?\s*sold$/i
+        .test(text)
+        ? text
+        : "";
+
+    }
+
+
+    if (
+      name === "reviews"
+    ) {
+
+      if (
+        /^\(\s*[\d,.]+(?:\.\d+)?[KkMm]?\s*\)$/
+          .test(text) ||
+        /^[\d,.]+(?:\.\d+)?[KkMm]?\s*(?:reviews?|ratings?|votes?)$/i
+          .test(text) ||
+        /^[\d,.]+(?:\.\d+)?[KkMm]?$/
+          .test(text)
+      ) {
+        return text;
+      }
+
+
+      return "";
+
+    }
+
+
+    if (
+      name === "rating"
+    ) {
+
+      const number =
+        Number(
+          text
+        );
+
+
+      if (
+        Number.isFinite(number) &&
+        number >= 0 &&
+        number <= 10
+      ) {
+        return text;
+      }
+
+
+      return "";
+
+    }
+
+
+    if (
+      name === "availability"
+    ) {
+
+      return /^(?:in stock|out of stock|available|unavailable|sold out|pre-order|preorder)$/i
+        .test(text)
+        ? text
+        : "";
+
+    }
+
+
+    if (
+      name === "action"
+    ) {
+
+      return /^(?:add to cart|add to basket|buy now|shop now|view details|read more|watch now|book now)$/i
+        .test(text)
+        ? text
+        : "";
+
+    }
+
+
+    if (
+      name === "price" ||
+      name === "current price" ||
+      name === "original price"
+    ) {
+
+      if (
+        isStandaloneCurrency(
+          text
+        )
+      ) {
+        return "";
+      }
+
+
+      return isValidPrice(
+        text
+      )
+        ? text
+        : "";
+
+    }
+
+
+    if (
+      name === "certificate"
+    ) {
+
+      if (
+        /^(?:18|19|20|21)\d{2}$/
+          .test(text)
+      ) {
+        return "";
+      }
+
+
+      return text;
+
+    }
+
+
+    return text;
+
+  }
+
+
+  /*
+    ==================================================
+    IDENTITY NORMALIZATION
+    ==================================================
+  */
+
+
+  function cleanIdentityValue(
+    value
+  ) {
+
+    let text =
+      normalizeValue(
+        value
+      );
+
+
+    const prefixPatterns = [
+
+      /^see\s+more\s+information\s+about\s+/i,
+
+      /^more\s+information\s+about\s+/i,
+
+      /^view\s+(?:more\s+)?(?:information|details)\s+(?:about|for)\s+/i,
+
+      /^view\s+details\s+(?:about|for)\s+/i,
+
+      /^open\s+(?:details\s+)?(?:about|for)\s+/i,
+
+      /^read\s+more\s+about\s+/i,
+
+      /*
+        IMDb-style accessibility label:
+
+        View title page for The Shawshank Redemption
+        → The Shawshank Redemption
+
+        This is generic because it is based on
+        language structure, not hostname/classes.
+      */
+
+      /^view\s+title\s+page\s+for\s+/i,
+
+      /^open\s+title\s+page\s+for\s+/i,
+
+      /^go\s+to\s+title\s+page\s+for\s+/i
+
+    ];
+
+
+    for (
+      const pattern
+      of prefixPatterns
+    ) {
+
+      text =
+        text.replace(
+          pattern,
+          ""
+        );
+
+    }
+
+
+    let match =
+      text.match(
+        /^mark\s+(.+?)\s+as\s+(?:watched|read|seen|favorite|favourite|saved)$/i
+      );
+
+
+    if (match) {
+
+      text =
+        match[
+          1
+        ];
+
+    }
+
+
+    match =
+      text.match(
+        /^(?:add|save)\s+(.+?)\s+to\s+(?:watchlist|wishlist|favorites|favourites|list)$/i
+      );
+
+
+    if (match) {
+
+      text =
+        match[
+          1
+        ];
+
+    }
+
+
+    return normalizeValue(
+      text
+    );
+
+  }
+
+
+  function isIdentityFieldName(
+    name
+  ) {
+
+    return /^(?:title|name|product title|product name|movie title|movie name|book title|book name|job title)$/
+      .test(name);
+
+  }
+
+
+  /*
+    ==================================================
+    FIELD VALIDATORS
+    ==================================================
+  */
+
+
+  function isValidDiscount(
+    value
+  ) {
+
+    const text =
+      normalizeValue(
+        value
+      );
+
+
+    if (
+      isStandaloneCurrency(
+        text
+      )
+    ) {
+      return false;
+    }
+
+
+    return (
+      /^-?\s*\d+(?:\.\d+)?\s*%$/i
+        .test(text) ||
+      /^-?\s*\d+(?:\.\d+)?\s*%\s*off$/i
+        .test(text)
+    );
+
+  }
+
+
+  function isValidSavings(
+    value
+  ) {
+
+    const text =
+      normalizeValue(
+        value
+      );
+
+
+    if (
+      isStandaloneCurrency(
+        text
+      )
+    ) {
+      return false;
+    }
+
+
+    return (
+      /\b(?:save|saving|savings)\b/i
+        .test(text) &&
+      (
+        /(?:rs\.?|npr|₨|रू|रु|₹|\$|€|£|¥)\s*\d/i
+          .test(text) ||
+        /\d[\d,.]*\s*(?:npr|rs\.?|usd|eur|inr|gbp)/i
+          .test(text)
+      )
+    );
+
+  }
+
+
+  function isStandaloneCurrency(
+    value
+  ) {
+
+    return /^(?:rs\.?|npr|₨|रू|रु|₹|\$|€|£|¥)$/i
+      .test(
+        normalizeValue(
+          value
+        )
+      );
+
+  }
+
+
+  function isValidPrice(
+    value
+  ) {
+
+    const text =
+      normalizeValue(
+        value
+      );
+
+
+    if (
+      isStandaloneCurrency(
+        text
+      )
+    ) {
+      return false;
+    }
+
+
+    return (
+      /^(?:rs\.?|npr|₨|रू|रु|₹|\$|€|£|¥)?\s*\d[\d,.]*(?:\.\d+)?$/i
+        .test(text) ||
+      /^\d[\d,.]*(?:\.\d+)?\s*(?:npr|rs\.?|usd|eur|inr|gbp)$/i
+        .test(text)
+    );
+
+  }
+
+
+  /*
+    ==================================================
+    SEMANTIC FIELD MERGING
+    ==================================================
+  */
+
+
+  function selectBestSemanticFields(
+    fields
+  ) {
+
+    const groups =
+      new Map();
+
+
+    fields.forEach(
+      function (field) {
+
+        const key =
+          semanticFieldKey(
+            field
+          );
+
+
+        if (
+          isTechnicalField(
+            field
+          )
+        ) {
+
+          groups.set(
+            "__unique__" +
+            field.path,
+            [
+              field
+            ]
+          );
+
+
+          return;
+
+        }
+
+
+        if (
+          !groups.has(
+            key
+          )
+        ) {
+
+          groups.set(
+            key,
+            []
+          );
+
+        }
+
+
+        groups
+          .get(
+            key
+          )
+          .push(
+            field
+          );
+
+      }
+    );
+
+
+    const selected =
+      [];
+
+
+    groups.forEach(
+      function (group) {
+
+        if (
+          group.length === 1
+        ) {
+
+          selected.push(
+            group[
+              0
+            ]
+          );
+
+          return;
+
+        }
+
+
+        const name =
+          normalizeFieldName(
+            group[
+              0
+            ].name
+          );
+
+
+        if (
+          !isStrongSemanticName(
+            name
+          ) &&
+          !isIdentityFieldName(
+            name
+          )
+        ) {
+
+          group.forEach(
+            function (field) {
+
+              selected.push(
+                field
+              );
+
+            }
+          );
+
+
+          return;
+
+        }
+
+
+        const winner =
+          [...group]
+            .sort(
+              function (
+                a,
+                b
+              ) {
+
+                return (
+                  calculateSemanticQuality(
+                    b
+                  ) -
+                  calculateSemanticQuality(
+                    a
+                  )
+                );
+
+              }
+            )[
+              0
+            ];
+
+
+        selected.push(
+          winner
+        );
+
+      }
+    );
+
+
+    selected.sort(
+      function (
+        a,
+        b
+      ) {
+
+        return (
+          fields.indexOf(
+            a
+          ) -
+          fields.indexOf(
+            b
+          )
+        );
+
+      }
+    );
+
+
+    return selected;
+
+  }
+
+
+  function semanticFieldKey(
+    field
+  ) {
+
+    const name =
+      normalizeFieldName(
+        field.name
+      );
+
+
+    if (
+      isIdentityFieldName(
+        name
+      )
+    ) {
+
+      return "__identity__";
+
+    }
+
+
+    return name;
+
+  }
+
+
+  function normalizeFieldName(
+    value
+  ) {
+
+    return String(
+      value ||
+      ""
+    )
+      .trim()
+      .toLowerCase()
+      .replace(
+        /\s+\d+$/,
+        ""
+      );
+
+  }
+
+
+  function isStrongSemanticName(
+    name
+  ) {
+
+    return new Set([
+
+      "title",
+      "name",
+
+      "product title",
+      "product name",
+
+      "movie title",
+      "movie name",
+
+      "book title",
+      "book name",
+
+      "job title",
+
+      "price",
+      "current price",
+      "original price",
+
+      "discount",
+      "savings",
+
+      "rating",
+      "reviews",
+
+      "sold",
+
+      "availability",
+
+      "location",
+
+      "brand",
+
+      "category",
+
+      "runtime",
+
+      "certificate",
+
+      "year",
+
+      "date",
+
+      "delivery",
+
+      "author",
+
+      "director",
+
+      "company",
+
+      "salary",
+
+      "status",
+
+      "action"
+
+    ])
+      .has(name);
+
+  }
+
+
+  function calculateSemanticQuality(
+    field
+  ) {
+
+    let score =
+      Number(
+        field.score ||
+        0
+      );
+
+
+    score +=
+      Number(
+        field.presence ||
+        0
+      ) *
+      2;
+
+
+    const fieldName =
+      normalizeFieldName(
+        field.name
+      );
+
+
+    if (
+      /title$/
+        .test(
+          fieldName
+        )
+    ) {
+      score +=
+        40;
+    }
+
+
+    const examples =
+      Array.isArray(
+        field.examples
+      )
+        ? field.examples
+        : [];
+
+
+    if (
+      examples.length === 0
+    ) {
+      return score;
+    }
+
+
+    let totalLength =
+      0;
+
+    let truncatedCount =
+      0;
+
+    let actionWrapperCount =
+      0;
+
+    let usefulCount =
+      0;
+
+
+    examples.forEach(
+      function (value) {
+
+        const text =
+          normalizeValue(
+            value
+          );
+
+
+        if (!text) {
+          return;
+        }
+
+
+        totalLength +=
+          cleanIdentityValue(
+            text
+          ).length;
+
+
+        usefulCount++;
+
+
+        if (
+          containsTruncation(
+            text
+          )
+        ) {
+
+          truncatedCount++;
+
+        }
+
+
+        if (
+          isAccessibilityActionLabel(
+            text
+          )
+        ) {
+
+          actionWrapperCount++;
+
+        }
+
+      }
+    );
+
+
+    if (
+      usefulCount > 0
+    ) {
+
+      score +=
+        Math.min(
+          totalLength /
+          usefulCount,
+          300
+        ) *
+        2;
+
+
+      score -=
+        truncatedCount *
+        150;
+
+
+      score -=
+        actionWrapperCount *
+        25;
+
+    }
+
+
+    return score;
+
+  }
+
+
+  function isAccessibilityActionLabel(
+    value
+  ) {
+
+    return (
+      /^see\s+more\s+information\s+about\s+/i
+        .test(value) ||
+
+      /^mark\s+.+\s+as\s+(?:watched|read|seen|saved)/i
+        .test(value) ||
+
+      /^view\s+(?:more\s+)?(?:information|details)/i
+        .test(value) ||
+
+      /^view\s+title\s+page\s+for\s+/i
+        .test(value)
+    );
+
+  }
+
+
+  function containsTruncation(
+    value
+  ) {
+
+    return (
+      /\.\.\./
+        .test(value) ||
+      /…/
+        .test(value)
+    );
+
+  }
+
+
+  function isTechnicalField(
+    field
+  ) {
+
+    return (
+
+      field.type ===
+        "url" ||
+
+      field.type ===
+        "image" ||
+
+      /^link(?:\s+\d+)?$/i
+        .test(
+          field.name ||
+          ""
+        ) ||
+
+      /^image url(?:\s+\d+)?$/i
+        .test(
+          field.name ||
+          ""
+        )
+
+    );
+
+  }
+
+
+  /*
+    ==================================================
+    RECORD MAP
+    ==================================================
+  */
 
 
   function buildRecordMap(
@@ -138,9 +1406,7 @@
     if (
       depth > 8
     ) {
-
       return;
-
     }
 
 
@@ -162,9 +1428,7 @@
             child
           )
         ) {
-
           return;
-
         }
 
 
@@ -173,17 +1437,24 @@
             .toLowerCase();
 
 
-        tagCounters[tag] =
+        tagCounters[
+          tag
+        ] =
           (
-            tagCounters[tag] ||
+            tagCounters[
+              tag
+            ] ||
             0
-          ) + 1;
+          ) +
+          1;
 
 
         const childPath =
           buildRelativePathPart(
             child,
-            tagCounters[tag]
+            tagCounters[
+              tag
+            ]
           );
 
 
@@ -208,7 +1479,8 @@
           child,
           fullPath,
           map,
-          depth + 1
+          depth +
+          1
         );
 
       }
@@ -228,152 +1500,29 @@
         element
       )
     ) {
-
       return;
-
     }
 
 
-    const text =
-      getOwnUsefulText(
+    const selected =
+      chooseBestElementValue(
         element
       );
 
 
-    const aria =
-      element.getAttribute(
-        "aria-label"
-      );
-
-
-    const title =
-      element.getAttribute(
-        "title"
-      );
-
-
-    const valueAttribute =
-      element.getAttribute(
-        "value"
-      );
-
-
-    const content =
-      element.getAttribute(
-        "content"
-      );
-
-
-    const candidateValues = [
-
-      {
-        value:
-          text,
-
-        type:
-          "text"
-      },
-
-      {
-        value:
-          aria,
-
-        type:
-          "aria"
-      },
-
-      {
-        value:
-          title,
-
-        type:
-          "title"
-      },
-
-      {
-        value:
-          valueAttribute,
-
-        type:
-          "value"
-      },
-
-      {
-        value:
-          content,
-
-        type:
-          "content"
-      }
-
-    ];
-
-
-    let selected =
-      null;
-
-
-    for (
-      const candidate
-      of candidateValues
+    if (
+      !selected ||
+      isLikelyCode(
+        selected.value
+      )
     ) {
-
-      const normalized =
-        normalizeValue(
-          candidate.value
-        );
-
-
-      if (
-        normalized === ""
-      ) {
-
-        continue;
-
-      }
-
-
-      if (
-        isLikelyCode(
-          normalized
-        )
-      ) {
-
-        continue;
-
-      }
-
-
-      selected = {
-
-        value:
-          normalized,
-
-        type:
-          candidate.type
-
-      };
-
-
-      break;
-
-    }
-
-
-    if (!selected) {
-
       return;
-
     }
-
-
-    const finalPath =
-      path ||
-      ":self";
 
 
     map.set(
-      finalPath,
+      path ||
+      ":self",
       {
 
         value:
@@ -389,6 +1538,261 @@
     );
 
   }
+
+
+  function chooseBestElementValue(
+    element
+  ) {
+
+    const visible =
+      normalizeValue(
+        getOwnUsefulText(
+          element
+        )
+      );
+
+
+    const title =
+      normalizeValue(
+        element.getAttribute(
+          "title"
+        )
+      );
+
+
+    const aria =
+      normalizeValue(
+        element.getAttribute(
+          "aria-label"
+        )
+      );
+
+
+    const content =
+      normalizeValue(
+        element.getAttribute(
+          "content"
+        )
+      );
+
+
+    const value =
+      normalizeValue(
+        element.getAttribute(
+          "value"
+        )
+      );
+
+
+    if (
+      title &&
+      shouldPreferExpandedValue(
+        title,
+        visible
+      )
+    ) {
+
+      return {
+        value:
+          title,
+        type:
+          "title"
+      };
+
+    }
+
+
+    if (
+      aria &&
+      shouldPreferExpandedValue(
+        aria,
+        visible
+      )
+    ) {
+
+      return {
+        value:
+          aria,
+        type:
+          "aria"
+      };
+
+    }
+
+
+    if (visible) {
+
+      return {
+        value:
+          visible,
+        type:
+          "text"
+      };
+
+    }
+
+
+    if (title) {
+
+      return {
+        value:
+          title,
+        type:
+          "title"
+      };
+
+    }
+
+
+    if (aria) {
+
+      return {
+        value:
+          aria,
+        type:
+          "aria"
+      };
+
+    }
+
+
+    if (content) {
+
+      return {
+        value:
+          content,
+        type:
+          "content"
+      };
+
+    }
+
+
+    if (value) {
+
+      return {
+        value:
+          value,
+        type:
+          "value"
+      };
+
+    }
+
+
+    return null;
+
+  }
+
+
+  function shouldPreferExpandedValue(
+    candidate,
+    visible
+  ) {
+
+    if (!candidate) {
+      return false;
+    }
+
+
+    if (!visible) {
+      return true;
+    }
+
+
+    if (
+      candidate === visible ||
+      candidate.length <=
+        visible.length
+    ) {
+      return false;
+    }
+
+
+    const candidateNormalized =
+      normalizeComparable(
+        candidate
+      );
+
+
+    if (
+      visible.includes(
+        "..."
+      )
+    ) {
+
+      const prefix =
+        normalizeComparable(
+          visible.replace(
+            /\.\.\.+$/g,
+            ""
+          )
+        );
+
+
+      if (
+        prefix.length >= 3 &&
+        candidateNormalized
+          .startsWith(
+            prefix
+          )
+      ) {
+        return true;
+      }
+
+    }
+
+
+    if (
+      visible.includes(
+        "…"
+      )
+    ) {
+
+      const prefix =
+        normalizeComparable(
+          visible.replace(
+            /…+$/g,
+            ""
+          )
+        );
+
+
+      if (
+        prefix.length >= 3 &&
+        candidateNormalized
+          .startsWith(
+            prefix
+          )
+      ) {
+        return true;
+      }
+
+    }
+
+
+    const visibleNormalized =
+      normalizeComparable(
+        visible
+      );
+
+
+    return (
+      visibleNormalized.length >=
+        4 &&
+      candidateNormalized.includes(
+        visibleNormalized
+      )
+    );
+
+  }
+
+
+  /*
+    ==================================================
+    FIELD EXTRACTION
+    ==================================================
+  */
 
 
   function extractFieldValue(
@@ -425,6 +1829,58 @@
     }
 
 
+    if (
+      field.path ===
+      "@semantic:rating"
+    ) {
+
+      try {
+
+        return (
+          globalThis.Sankalan
+            ?.ratingExtractor
+            ?.extract(
+              item
+            )
+            ?.rating ||
+          ""
+        );
+
+      } catch (error) {
+
+        return "";
+
+      }
+
+    }
+
+
+    if (
+      field.path ===
+      "@semantic:reviews"
+    ) {
+
+      try {
+
+        return (
+          globalThis.Sankalan
+            ?.ratingExtractor
+            ?.extract(
+              item
+            )
+            ?.reviews ||
+          ""
+        );
+
+      } catch (error) {
+
+        return "";
+
+      }
+
+    }
+
+
     const direct =
       recordMap.get(
         field.path
@@ -443,31 +1899,10 @@
     }
 
 
-    /*
-      Fallback:
-      some dynamic sites slightly alter
-      classes or wrappers between cards.
-
-      Try to resolve a similar path.
-    */
-
-    const similar =
-      findSimilarPathValue(
-        field.path,
-        recordMap
-      );
-
-
-    if (
-      similar !== ""
-    ) {
-
-      return similar;
-
-    }
-
-
-    return "";
+    return findSimilarPathValue(
+      field.path,
+      recordMap
+    );
 
   }
 
@@ -517,6 +1952,7 @@
           bestScore =
             score;
 
+
           bestValue =
             normalizeValue(
               info.value
@@ -539,10 +1975,15 @@
   ) {
 
     const firstParts =
-      first.split(" > ");
+      first.split(
+        " > "
+      );
+
 
     const secondParts =
-      second.split(" > ");
+      second.split(
+        " > "
+      );
 
 
     const maxLength =
@@ -555,9 +1996,7 @@
     if (
       maxLength === 0
     ) {
-
       return 0;
-
     }
 
 
@@ -579,12 +2018,14 @@
     ) {
 
       if (
-        firstParts[i] ===
-        secondParts[i]
+        firstParts[
+          i
+        ] ===
+        secondParts[
+          i
+        ]
       ) {
-
         matches++;
-
       }
 
     }
@@ -627,6 +2068,13 @@
   }
 
 
+  /*
+    ==================================================
+    LINKS
+    ==================================================
+  */
+
+
   function addLinkFields(
     item,
     map
@@ -667,46 +2115,6 @@
   }
 
 
-  function addImageFields(
-    item,
-    map
-  ) {
-
-    const images =
-      collectImages(
-        item
-      );
-
-
-    images.forEach(
-      function (
-        src,
-        index
-      ) {
-
-        map.set(
-          "@image:" +
-          index,
-          {
-
-            value:
-              src,
-
-            type:
-              "image",
-
-            element:
-              null
-
-          }
-        );
-
-      }
-    );
-
-  }
-
-
   function extractLinkByIndex(
     item,
     path
@@ -714,7 +2122,11 @@
 
     const index =
       Number(
-        path.split(":")[1]
+        path.split(
+          ":"
+        )[
+          1
+        ]
       );
 
 
@@ -725,32 +2137,9 @@
 
 
     return (
-      links[index] ||
-      ""
-    );
-
-  }
-
-
-  function extractImageByIndex(
-    item,
-    path
-  ) {
-
-    const index =
-      Number(
-        path.split(":")[1]
-      );
-
-
-    const images =
-      collectImages(
-        item
-      );
-
-
-    return (
-      images[index] ||
+      links[
+        index
+      ] ||
       ""
     );
 
@@ -812,20 +2201,28 @@
           );
 
 
-        if (
-          !href ||
-          seen.has(
+        if (!href) {
+          return;
+        }
+
+
+        const comparisonKey =
+          normalizeLinkForComparison(
             href
+          );
+
+
+        if (
+          seen.has(
+            comparisonKey
           )
         ) {
-
           return;
-
         }
 
 
         seen.add(
-          href
+          comparisonKey
         );
 
 
@@ -837,11 +2234,168 @@
     );
 
 
-    return unique
-      .slice(
-        0,
-        5
+    return unique.slice(
+      0,
+      5
+    );
+
+  }
+
+
+  function normalizeLinkForComparison(
+    value
+  ) {
+
+    try {
+
+      const url =
+        new URL(
+          value
+        );
+
+
+      const ignoredParams =
+        new Set([
+
+          "ref",
+          "ref_",
+          "referrer",
+
+          "utm_source",
+          "utm_medium",
+          "utm_campaign",
+          "utm_term",
+          "utm_content"
+
+        ]);
+
+
+      Array.from(
+        url.searchParams.keys()
+      )
+        .forEach(
+          function (key) {
+
+            if (
+              ignoredParams.has(
+                key.toLowerCase()
+              ) ||
+              /^ref_/i
+                .test(key)
+            ) {
+
+              url.searchParams.delete(
+                key
+              );
+
+            }
+
+          }
+        );
+
+
+      return (
+        url.origin +
+        url.pathname +
+        (
+          url.search
+            ? url.search
+            : ""
+        )
+      )
+        .replace(
+          /\/+$/,
+          ""
+        )
+        .toLowerCase();
+
+    } catch (error) {
+
+      return String(
+        value ||
+        ""
+      )
+        .toLowerCase();
+
+    }
+
+  }
+
+
+  /*
+    ==================================================
+    IMAGES
+    ==================================================
+  */
+
+
+  function addImageFields(
+    item,
+    map
+  ) {
+
+    const images =
+      collectImages(
+        item
       );
+
+
+    images.forEach(
+      function (
+        src,
+        index
+      ) {
+
+        map.set(
+          "@image:" +
+          index,
+          {
+
+            value:
+              src,
+
+            type:
+              "image",
+
+            element:
+              null
+
+          }
+        );
+
+      }
+    );
+
+  }
+
+
+  function extractImageByIndex(
+    item,
+    path
+  ) {
+
+    const index =
+      Number(
+        path.split(
+          ":"
+        )[
+          1
+        ]
+      );
+
+
+    const images =
+      collectImages(
+        item
+      );
+
+
+    return (
+      images[
+        index
+      ] ||
+      ""
+    );
 
   }
 
@@ -961,13 +2515,19 @@
     );
 
 
-    return urls
-      .slice(
-        0,
-        5
-      );
+    return urls.slice(
+      0,
+      5
+    );
 
   }
+
+
+  /*
+    ==================================================
+    HEADERS
+    ==================================================
+  */
 
 
   function makeUniqueHeaders(
@@ -991,7 +2551,21 @@
 
 
         if (
-          base === "" ||
+          isIdentityFieldName(
+            normalizeFieldName(
+              base
+            )
+          )
+        ) {
+
+          base =
+            "Title";
+
+        }
+
+
+        if (
+          !base ||
           /^field$/i
             .test(
               base
@@ -1000,7 +2574,10 @@
 
           base =
             "Field " +
-            (index + 1);
+            (
+              index +
+              1
+            );
 
         }
 
@@ -1014,23 +2591,25 @@
 
         used.set(
           base,
-          count + 1
+          count +
+          1
         );
 
 
         if (
           count === 0
         ) {
-
           return base;
-
         }
 
 
         return (
           base +
           " " +
-          (count + 1)
+          (
+            count +
+            1
+          )
         );
 
       }
@@ -1054,6 +2633,13 @@
       .trim();
 
   }
+
+
+  /*
+    ==================================================
+    ELEMENTS
+    ==================================================
+  */
 
 
   function shouldIgnoreElement(
@@ -1093,9 +2679,7 @@
         element
       )
     ) {
-
       return false;
-
     }
 
 
@@ -1114,16 +2698,9 @@
         );
 
 
-    if (
-      children.length > 4
-    ) {
-
-      return false;
-
-    }
-
-
-    return true;
+    return (
+      children.length <= 5
+    );
 
   }
 
@@ -1136,22 +2713,23 @@
       "";
 
 
-    element.childNodes.forEach(
-      function (node) {
+    element.childNodes
+      .forEach(
+        function (node) {
 
-        if (
-          node.nodeType ===
-          Node.TEXT_NODE
-        ) {
+          if (
+            node.nodeType ===
+            Node.TEXT_NODE
+          ) {
 
-          text +=
-            " " +
-            node.textContent;
+            text +=
+              " " +
+              node.textContent;
+
+          }
 
         }
-
-      }
-    );
+      );
 
 
     text =
@@ -1160,20 +2738,23 @@
       );
 
 
+    if (text) {
+      return text;
+    }
+
+
     if (
-      text === "" &&
       element.children.length <= 1
     ) {
 
-      text =
-        normalizeValue(
-          element.innerText
-        );
+      return normalizeValue(
+        element.innerText
+      );
 
     }
 
 
-    return text;
+    return "";
 
   }
 
@@ -1255,6 +2836,13 @@
   }
 
 
+  /*
+    ==================================================
+    HELPERS
+    ==================================================
+  */
+
+
   function normalizeValue(
     value
   ) {
@@ -1263,9 +2851,7 @@
       value === null ||
       value === undefined
     ) {
-
       return "";
-
     }
 
 
@@ -1285,14 +2871,74 @@
   }
 
 
+  function normalizeComparable(
+    value
+  ) {
+
+    return normalizeValue(
+      value
+    )
+      .toLowerCase()
+      .replace(
+        /\s+/g,
+        " "
+      );
+
+  }
+
+
+  function normalizeNumeric(
+    value
+  ) {
+
+    const text =
+      normalizeValue(
+        value
+      );
+
+
+    if (
+      !/^-?\d+(?:\.\d+)?$/
+        .test(
+          text
+        )
+    ) {
+      return "";
+    }
+
+
+    const number =
+      Number(
+        text
+      );
+
+
+    if (
+      !Number.isFinite(
+        number
+      )
+    ) {
+      return "";
+    }
+
+
+    return String(
+      Math.round(
+        number *
+        100
+      ) /
+      100
+    );
+
+  }
+
+
   function normalizeURL(
     value
   ) {
 
     if (!value) {
-
       return "";
-
     }
 
 
@@ -1309,9 +2955,7 @@
           url
         )
     ) {
-
       return "";
-
     }
 
 
@@ -1330,19 +2974,12 @@
     }
 
 
-    if (
-      !/^https?:\/\//i
-        .test(
-          url
-        )
-    ) {
-
-      return "";
-
-    }
-
-
-    return url;
+    return /^https?:\/\//i
+      .test(
+        url
+      )
+      ? url
+      : "";
 
   }
 
@@ -1352,12 +2989,9 @@
   ) {
 
     if (
-      value.length >
-      1000
+      value.length > 1000
     ) {
-
       return true;
-
     }
 
 

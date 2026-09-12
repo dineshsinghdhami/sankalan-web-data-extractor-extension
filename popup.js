@@ -673,25 +673,99 @@ excelBtn.addEventListener(
     }
 
     startExportProgress(
-      "Preparing spreadsheet..."
+      "Preparing XLSX workbook..."
     );
 
-    const html =
-      buildExcelHTML(
-        extractedData
+    try {
+
+      if (
+        typeof XLSX === "undefined"
+      ) {
+
+        throw new Error(
+          "The XLSX library is not loaded. Make sure vendor/xlsx.full.min.js exists and is loaded before popup.js."
+        );
+
+      }
+
+      const workbookData =
+        extractedData.map(
+          function (row) {
+
+            return row.map(
+              function (value) {
+
+                return String(
+                  value ??
+                  ""
+                );
+
+              }
+            );
+
+          }
+        );
+
+      const worksheet =
+        XLSX.utils.aoa_to_sheet(
+          workbookData
+        );
+
+      forceWorksheetCellsToText(
+        worksheet
       );
 
-    downloadBlob(
-      html,
-      "application/vnd.ms-excel",
-      buildFilename(
-        "xls"
-      )
-    );
+      applyWorksheetColumnWidths(
+        worksheet,
+        workbookData
+      );
 
-    finishExportProgress(
-      "Spreadsheet exported"
-    );
+      const workbook =
+        XLSX.utils.book_new();
+
+      XLSX.utils.book_append_sheet(
+        workbook,
+        worksheet,
+        "Sankalan Data"
+      );
+
+      const workbookBytes =
+        XLSX.write(
+          workbook,
+          {
+            bookType: "xlsx",
+            type: "array",
+            compression: true
+          }
+        );
+
+      downloadBlob(
+        workbookBytes,
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        buildFilename(
+          "xlsx"
+        )
+      );
+
+      finishExportProgress(
+        "XLSX exported"
+      );
+
+    } catch (error) {
+
+      finishExportProgress(
+        "XLSX export failed"
+      );
+
+      showStatus(
+        "error",
+        "Excel export failed",
+        getFriendlyErrorMessage(
+          error
+        )
+      );
+
+    }
 
   }
 );
@@ -1612,90 +1686,163 @@ function downloadBlob(
 }
 
 
-function buildExcelHTML(
-  data
+function forceWorksheetCellsToText(
+  worksheet
 ) {
 
-  const rows =
-    data.map(
-      function (
-        row,
-        rowIndex
-      ) {
+  const range =
+    XLSX.utils.decode_range(
+      worksheet["!ref"] ||
+      "A1:A1"
+    );
 
-        const tag =
-          rowIndex === 0
-            ? "th"
-            : "td";
+  for (
+    let row = range.s.r;
+    row <= range.e.r;
+    row++
+  ) {
 
-        const cells =
-          row.map(
-            function (value) {
+    for (
+      let column = range.s.c;
+      column <= range.e.c;
+      column++
+    ) {
 
-              return (
-                `<${tag}>` +
-                escapeHTML(
-                  value
-                ) +
-                `</${tag}>`
-              );
+      const address =
+        XLSX.utils.encode_cell({
+          r: row,
+          c: column
+        });
 
-            }
-          )
-          .join("");
+      const cell =
+        worksheet[address];
 
-        return (
-          `<tr>${cells}</tr>`
+      if (!cell) {
+        continue;
+      }
+
+      /*
+        Sankalan is a raw-data extractor.
+
+        Force every extracted value to remain
+        text inside Excel so applications do
+        not reinterpret values automatically.
+
+        Examples:
+
+        +977
+        stays +977
+
+        2.8%
+        stays 2.8%
+
+        21 December 1923
+        stays 21 December 1923
+      */
+
+      cell.t = "s";
+
+      cell.v =
+        String(
+          cell.v ??
+          ""
         );
 
-      }
-    )
-    .join("");
+      /*
+        Excel text number format.
+      */
 
-  return `
-    <html>
-      <head>
-        <meta charset="UTF-8">
-      </head>
-      <body>
-        <table border="1">
-          ${rows}
-        </table>
-      </body>
-    </html>
-  `;
+      cell.z = "@";
+
+      /*
+        Remove cached formatted representation
+        so SheetJS rebuilds the value from the
+        raw string.
+      */
+
+      delete cell.w;
+
+    }
+
+  }
 
 }
 
 
-function escapeHTML(
-  value
+function applyWorksheetColumnWidths(
+  worksheet,
+  data
 ) {
 
-  return String(
-    value ??
-    ""
-  )
-    .replace(
-      /&/g,
-      "&amp;"
-    )
-    .replace(
-      /</g,
-      "&lt;"
-    )
-    .replace(
-      />/g,
-      "&gt;"
-    )
-    .replace(
-      /"/g,
-      "&quot;"
-    )
-    .replace(
-      /'/g,
-      "&#039;"
+  const maximumColumns =
+    data.reduce(
+      function (
+        maximum,
+        row
+      ) {
+
+        return Math.max(
+          maximum,
+          row.length
+        );
+
+      },
+      0
     );
+
+
+  const widths =
+    [];
+
+
+  for (
+    let column = 0;
+    column < maximumColumns;
+    column++
+  ) {
+
+    let maximumLength =
+      10;
+
+
+    data.forEach(
+      function (row) {
+
+        const value =
+          String(
+            row[
+              column
+            ] ??
+            ""
+          );
+
+
+        maximumLength =
+          Math.max(
+            maximumLength,
+            Math.min(
+              value.length,
+              60
+            )
+          );
+
+      }
+    );
+
+
+    widths.push({
+      wch:
+        Math.min(
+          maximumLength + 2,
+          62
+        )
+    });
+
+  }
+
+
+  worksheet["!cols"] =
+    widths;
 
 }
 

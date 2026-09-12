@@ -705,6 +705,7 @@ async function getActiveTab() {
       currentWindow: true
     });
 
+
   if (
     !tabs ||
     tabs.length === 0
@@ -716,8 +717,10 @@ async function getActiveTab() {
 
   }
 
+
   const tab =
     tabs[0];
+
 
   if (
     !tab.id
@@ -729,34 +732,75 @@ async function getActiveTab() {
 
   }
 
+
+  /*
+    Only block URLs that are definitely
+    browser-internal.
+
+    Do NOT require tab.url to be present,
+    because some file:// tabs may not expose
+    it through tabs.query even when file
+    access is enabled.
+  */
+
+  const url =
+    String(
+      tab.url ||
+      ""
+    );
+
+
   if (
-    !isInjectableURL(
-      tab.url
+    isBlockedBrowserURL(
+      url
     )
   ) {
 
     throw new Error(
-      "Sankalan cannot run on browser-internal pages. Open a normal website and try again."
+      "Sankalan cannot run on browser-internal pages. Open a normal webpage or local HTML file and try again."
     );
 
   }
+
 
   return tab;
 
 }
 
 
-function isInjectableURL(
+function isBlockedBrowserURL(
   value
 ) {
 
-  return /^https?:\/\//i
-    .test(
-      String(
-        value ||
-        ""
-      )
-    );
+  const url =
+    String(
+      value ||
+      ""
+    )
+      .trim()
+      .toLowerCase();
+
+
+  /*
+    Empty URL is allowed here.
+
+    chrome.scripting.executeScript()
+    will make the final decision.
+  */
+
+  if (!url) {
+    return false;
+  }
+
+
+  return (
+    url.startsWith("edge://") ||
+    url.startsWith("chrome://") ||
+    url.startsWith("about:") ||
+    url.startsWith("devtools://") ||
+    url.startsWith("chrome-extension://") ||
+    url.startsWith("edge-extension://")
+  );
 
 }
 
@@ -766,18 +810,20 @@ function setSourceTab(
 ) {
 
   const tableActive =
-    type ===
-    "table";
+    type === "table";
+
 
   tableTab.classList.toggle(
     "active",
     tableActive
   );
 
+
   groupTab.classList.toggle(
     "active",
     !tableActive
   );
+
 
   tableTab.setAttribute(
     "aria-selected",
@@ -786,6 +832,7 @@ function setSourceTab(
     )
   );
 
+
   groupTab.setAttribute(
     "aria-selected",
     String(
@@ -793,10 +840,12 @@ function setSourceTab(
     )
   );
 
+
   tablePanel.classList.toggle(
     "hidden",
     !tableActive
   );
+
 
   groupPanel.classList.toggle(
     "hidden",
@@ -3205,19 +3254,18 @@ function extractSelectedTable(
             ) {
 
               activeRowspans.set(
-                columnIndex +
-                  offset,
-                {
-                  value:
-                    offset === 0
-                      ? value
-                      : "",
+  columnIndex +
+    offset,
+  {
+    value:
+      offset === 0
+        ? value
+        : "",
 
-                  remaining:
-                    rowspan -
-                    1
-                }
-              );
+    remaining:
+      rowspan
+  }
+);
 
             }
 
@@ -3522,36 +3570,95 @@ function extractSelectedTable(
 
 
   function normalizeJoinedText(
-    value
-  ) {
+  value
+) {
 
-    return String(
-      value ||
-      ""
+  return String(
+    value ||
+    ""
+  )
+    .replace(
+      /\u00a0/g,
+      " "
     )
-      .replace(
-        /\u00a0/g,
-        " "
-      )
-      .replace(
-        /\s+([,.;:!?%\)\]])/g,
-        "$1"
-      )
-      .replace(
-        /([\(\[])\s+/g,
-        "$1"
-      )
-      .replace(
-        /\s+\[(\d+(?:\]\[\d+)*)\]/g,
-        "[$1]"
-      )
-      .replace(
-        /\s+/g,
-        " "
-      )
-      .trim();
 
-  }
+    /*
+      Remove spaces before punctuation.
+    */
+    .replace(
+      /\s+([,.;:!?%\)\]])/g,
+      "$1"
+    )
+
+    /*
+      Remove spaces after opening punctuation.
+    */
+    .replace(
+      /([\(\[])\s+/g,
+      "$1"
+    )
+
+    /*
+      Keep citation markers attached.
+      Example:
+      Nepal [2]
+      → Nepal[2]
+    */
+    .replace(
+      /\s+\[(\d+(?:\]\[\d+)*)\]/g,
+      "[$1]"
+    )
+
+    /*
+      Normalize square/cubic units.
+      Examples:
+      km 2  → km²
+      m 2   → m²
+      km 3  → km³
+      m 3   → m³
+    */
+    .replace(
+      /\b(km|m|cm|mm)\s+2\b/gi,
+      "$1²"
+    )
+    .replace(
+      /\b(km|m|cm|mm)\s+3\b/gi,
+      "$1³"
+    )
+
+    /*
+      Same idea when used after slash.
+      Example:
+      /km 2
+      → /km²
+    */
+    .replace(
+      /\/(km|m|cm|mm)\s+2\b/gi,
+      "/$1²"
+    )
+    .replace(
+      /\/(km|m|cm|mm)\s+3\b/gi,
+      "/$1³"
+    )
+
+    /*
+      Timezone formatting:
+      UTC +05:45
+      → UTC+05:45
+    */
+    .replace(
+      /\bUTC\s+([+-]\d{1,2}:\d{2})\b/g,
+      "UTC$1"
+    )
+
+    .replace(
+      /\s+/g,
+      " "
+    )
+
+    .trim();
+
+}
 
 
   function normalizeCellValue(

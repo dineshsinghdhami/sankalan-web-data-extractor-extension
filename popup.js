@@ -440,10 +440,10 @@ extractGroupBtn.addEventListener(
           tabId: tab.id
         },
         files: [
-          "extractors/field-discovery.js",
-          "extractors/ratings.js",
-          "extractors/products.js"
-        ]
+  "extractors/field-discovery.js",
+  "extractors/ratings.js",
+  "extractors/record-extractor.js"
+]
       });
 
       const group =

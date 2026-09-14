@@ -1,15 +1,27 @@
 {
   "manifest_version": 3,
   "name": "Sankalan",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Extract raw data from webpages and export it for analysis.",
   "permissions": [
     "activeTab",
     "scripting",
     "downloads"
   ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
   "action": {
     "default_title": "Sankalan",
-    "default_popup": "popup.html"
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
   }
 }

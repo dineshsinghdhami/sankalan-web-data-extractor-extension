@@ -1,198 +1,287 @@
-# Sankalan — Web Data Extractor
+# Sankalan : Web Data Extractor
 
-![Version](https://img.shields.io/badge/version-0.2.0-black)
-![Manifest](https://img.shields.io/badge/Manifest-V3-blue)
-![JavaScript](https://img.shields.io/badge/JavaScript-Vanilla-yellow)
-![Browser](https://img.shields.io/badge/Browser-Edge%20%7C%20Chrome-0A66C2)
-![Export](https://img.shields.io/badge/Export-CSV%20%7C%20JSON%20%7C%20XLSX-success)
+![License](https://img.shields.io/badge/license-Proprietary-red)
+![JavaScript](https://img.shields.io/badge/JavaScript-Vanilla-F7DF1E)
+![Browser Extension](https://img.shields.io/badge/Browser-Extension-4285F4)
+![Microsoft Edge](https://img.shields.io/badge/Microsoft%20Edge-Compatible-0078D7)
+![Chrome](https://img.shields.io/badge/Chrome-Compatible-4285F4)
+![CSV](https://img.shields.io/badge/Export-CSV-green)
+![JSON](https://img.shields.io/badge/Export-JSON-orange)
+![Excel](https://img.shields.io/badge/Export-XLSX-217346)
 
-**Sankalan** is a browser extension for discovering and extracting structured data from webpages and exporting it in analysis-ready formats.
+**Sankalan** is a browser extension that I developed to automatically discover and extract structured webpage data into **CSV, JSON, and Excel files** for further analysis.
+
+I built Sankalan while learning **Data Analytics**. During practice, I often had to search for ready-made datasets on platforms such as Kaggle before I could begin working with Python, Pandas, Excel, SQL, or Power BI.
+
+Instead of always depending on prepared datasets, I wanted a way to collect **current real-world data directly from webpages**.
+
+That idea led me to build Sankalan.
 
 > **Collect first. Analyze later.**
 
-Sankalan is designed for data collection, not data cleaning or analysis. It scans the current webpage, detects structured content such as HTML tables and repeated records, discovers fields dynamically, previews the extracted dataset, and exports the raw data to **CSV, JSON, or XLSX**.
+Sankalan scans webpages, detects tables and repeated records such as products, books, movies, quotes, listings, and cards, then converts the discovered information into structured datasets.
+
+> **Note:** This project is proprietary. Copying, modification, redistribution, or reuse requires prior written permission. See [LICENSE.md](LICENSE.md).
+
+---
+
+## Why I Built Sankalan
+
+While learning Data Analytics, I noticed that most practice projects begin with an already prepared dataset.
+
+A common workflow was:
+
+```text
+Find dataset on Kaggle
+        ↓
+Download CSV
+        ↓
+Open in Pandas / Excel
+        ↓
+Clean and analyze data
+```
+
+I wanted to work with a more realistic workflow where I could first collect data that is currently available on the web.
+
+For example, instead of using an old ecommerce dataset, I wanted to collect current product information such as:
+
+- Product names
+- Prices
+- Discounts
+- Ratings
+- Reviews
+- Availability
+- Links
+- Image URLs
+
+The same idea can be applied to books, movies, quotes, public information, listings, and many other structured webpages.
+
+Sankalan allows me to collect this data first and then continue the analysis using tools such as **Python, Pandas, Excel, SQL, Power BI, and Machine Learning libraries**.
 
 ---
 
 ## Features
 
-- Scan the current webpage for structured data
+- Scan the currently opened webpage
 - Detect visible HTML tables
-- Detect repeated records, cards, listings, and product-style layouts
-- Dynamically discover fields instead of using a fixed schema
-- Extract titles, names, prices, ratings, reviews, availability, metadata, links, images, and other visible fields when present
-- Merge semantically related fields when appropriate
-- Preserve missing values as blank values
-- Preserve source URLs and image URLs
+- Detect repeated records, cards, listings, and products
+- Automatically discover available fields
+- Generate different schemas for different webpages
+- Extract text, prices, ratings, reviews, discounts, links, and image URLs
+- Extract authors, tags, dates, and availability where present
+- Support standard HTML tables
+- Handle `rowspan` and `colspan`
+- Support key-value and hierarchical tables
+- Remove empty and unnecessary duplicate fields
+- Preserve missing values as blank fields
 - Preview extracted data before export
-- Export data to:
-  - CSV
-  - JSON
-  - XLSX
-- Preserve raw text in XLSX to reduce unwanted spreadsheet conversion
-- Support `rowspan` and `colspan` in HTML table extraction
-- Extract key-value and infobox-style tables
-- Work with local HTML files when browser file access is enabled
-- Manifest V3 browser extension
+- Export datasets as CSV
+- Export datasets as JSON
+- Export datasets as Excel `.xlsx`
+- Preserve raw values during Excel export
+- Support local HTML files for testing
+- Work without a backend server
+
+---
+
+## Dynamic Field Discovery
+
+Sankalan does not use one fixed schema for every webpage.
+
+For example, a books page may produce:
+
+```text
+Title
+Price
+Rating
+Availability
+Link
+Image URL
+```
+
+A movie page may produce:
+
+```text
+Title
+Rating
+Reviews
+Runtime
+Year
+Certificate
+Link
+Image URL
+```
+
+A quotes page may produce:
+
+```text
+Quote
+Tags
+Author
+Author Link
+```
+
+An ecommerce page may produce:
+
+```text
+Title
+Price
+Discount
+Rating
+Reviews
+Sold
+Link
+Image URL
+```
+
+The fields depend on the information actually present on the webpage.
+
+This keeps Sankalan more flexible and avoids hardcoding it for only one website or one dataset structure.
+
+---
+
+## Table Extraction
+
+Sankalan can also extract information directly from HTML tables.
+
+The table extraction system supports:
+
+- Standard tables
+- Tables without explicit headers
+- `rowspan`
+- `colspan`
+- Nested table filtering
+- Key-value tables
+- Hierarchical information
+- Empty column removal
+
+For example, webpage information can be converted into structures such as:
+
+```text
+Field | Value
+```
+
+or:
+
+```text
+Government - President
+Area - Total
+Population - Density
+Time zone
+Calling code
+```
+
+This makes the extracted information easier to use in later analysis.
 
 ---
 
 ## Raw Data Preservation
 
-Sankalan tries to preserve webpage values as raw text instead of silently converting them.
+Sankalan is designed mainly for **data collection**, not automatic data cleaning.
+
+Because of this, values such as:
+
+```text
++977
+2.8%
+21 December 1923
+147,181 km²
+UTC+05:45
+```
+
+are preserved as closely as possible.
 
 For example:
 
 ```text
-+977              → +977
-2.8%              → 2.8%
-21 December 1923  → 21 December 1923
++977
 ```
 
-This is especially useful when the exported dataset will later be processed with tools such as:
+should remain `+977`, rather than being automatically converted into `977`.
 
-- Python
-- Pandas
-- Excel
-- Power BI
-- SQL
-- Jupyter Notebook
+The Excel export system writes extracted values as text where possible so spreadsheet software does not unexpectedly change the raw data.
+
+Cleaning and transformation can then be performed later during the Data Analytics stage.
 
 ---
 
-## Dynamic Schema Discovery
+## Export Formats
 
-Sankalan does **not** depend on one fixed structure such as:
+Sankalan currently supports:
 
-```text
-Name | Price | Discount | Rating
-```
+- **CSV** — useful for Pandas, Excel, SQL, and analytics workflows
+- **JSON** — useful for Python, JavaScript, APIs, and structured processing
+- **Excel `.xlsx`** — useful for spreadsheet analysis and Power BI workflows
 
-Instead, it examines the selected repeated records and discovers the available fields from the webpage itself.
-
-This means different pages can produce different schemas.
-
-Examples:
-
-```text
-Books
-Title | Price | Rating | Availability | Action | Link | Image URL
-```
-
-```text
-Movies
-Title | Rating | Reviews | Runtime | Year | Certificate | Link | Image URL
-```
-
-```text
-Quotes
-Quote | Tags | Author | Author Link
-```
-
-```text
-Wikipedia-style information
-Field | Value
-```
-
-The goal is to extract what actually exists on the page instead of inventing missing fields.
+Excel files are generated using **SheetJS**.
 
 ---
 
-## How Sankalan Works
+## Tech Stack
 
-```text
-Current webpage
-      ↓
-Page scanner
-      ↓
-Structured source detection
-      ↓
-┌──────────────────┬────────────────────┐
-│ HTML Tables      │ Repeated Records   │
-└──────────────────┴────────────────────┘
-      ↓                       ↓
-Table extractor        Field discovery
-                              ↓
-                       Semantic extraction
-                              ↓
-                         Record extractor
-                              ↓
-                     Dataset normalization
-                              ↓
-                         Data preview
-                              ↓
-                  CSV / JSON / XLSX export
-```
+- **Language:** JavaScript
+- **Interface:** HTML, CSS
+- **Extension Standard:** Manifest V3
+- **Browser APIs:** Chrome Extension APIs
+- **Spreadsheet Export:** SheetJS
+- **Browsers:** Microsoft Edge and Chromium-based browsers
+- **Export Formats:** CSV, JSON, XLSX
 
 ---
 
 ## Project Structure
 
+| Path | Purpose |
+| --- | --- |
+| `manifest.json` | Browser extension configuration |
+| `popup.html` | Main popup interface |
+| `popup.css` | Popup styling |
+| `popup.js` | Scanning, extraction, preview, and export workflow |
+| `extractors/field-discovery.js` | Dynamic field discovery |
+| `extractors/record-extractor.js` | Repeated record extraction |
+| `extractors/ratings.js` | Rating and review extraction |
+| `extractors/utils.js` | Shared extractor utilities |
+| `vendor/xlsx.full.min.js` | SheetJS library for Excel export |
+| `icons/` | Sankalan extension icons |
+| `LICENSE.md` | Licensing terms |
+
+---
+
+## How Sankalan Works
+
+1. Open a webpage containing useful data.
+2. Open the Sankalan browser extension.
+3. Click **Scan Current Page**.
+4. Sankalan detects tables and repeated record groups.
+5. Select the data source you want to extract.
+6. Click **Extract Table** or **Extract Item Fields**.
+7. Preview the automatically discovered dataset.
+8. Export it as CSV, JSON, or Excel.
+9. Continue cleaning and analysis using your preferred analytics tools.
+
+A typical workflow is:
+
 ```text
-sankalan-web-data-extractor-extension/
-│
-├── manifest.json
-├── popup.html
-├── popup.css
-├── popup.js
-├── package.json
-├── package-lock.json
-│
-├── extractors/
-│   ├── field-discovery.js
-│   ├── ratings.js
-│   ├── record-extractor.js
-│   └── utils.js
-│
-├── vendor/
-│   └── xlsx.full.min.js
-│
-└── icons/
-    ├── source.png
-    ├── icon16.png
-    ├── icon32.png
-    ├── icon48.png
-    └── icon128.png
+Webpage
+   ↓
+Sankalan
+   ↓
+CSV / JSON / Excel
+   ↓
+Python / Pandas / SQL / Excel
+   ↓
+Data Cleaning
+   ↓
+Exploratory Data Analysis
+   ↓
+Visualization / Power BI / Machine Learning
+   ↓
+Insights
 ```
 
 ---
 
-## Main Components
-
-### `popup.js`
-
-Controls the extension workflow:
-
-- webpage scanning
-- table selection
-- repeated-group selection
-- extraction
-- preview rendering
-- CSV export
-- JSON export
-- XLSX export
-
-### `field-discovery.js`
-
-Inspects repeated records and dynamically discovers candidate fields using DOM structure, visible text, attributes, links, images, and semantic patterns.
-
-### `ratings.js`
-
-Handles rating and review extraction from different representations such as visible numbers, metadata, stars, attributes, and rating scales.
-
-### `record-extractor.js`
-
-Builds the final dataset from discovered fields and applies semantic cleanup, duplicate-field reduction, field validation, and structured link/image extraction.
-
-### `xlsx.full.min.js`
-
-Local SheetJS build used to generate real `.xlsx` files without depending on a remote CDN.
-
----
-
 ## Installation
-
-Sankalan is currently installed as an **unpacked browser extension**.
 
 ### Microsoft Edge
 
@@ -205,234 +294,141 @@ edge://extensions
 
 3. Enable **Developer mode**.
 4. Click **Load unpacked**.
-5. Select the project folder:
-
-```text
-sankalan-web-data-extractor-extension
-```
-
-6. Pin **Sankalan** to the browser toolbar.
+5. Select the Sankalan project folder.
+6. Pin the extension if required.
 
 ### Google Chrome
 
-1. Open:
+Open:
 
 ```text
 chrome://extensions
 ```
 
-2. Enable **Developer mode**.
-3. Click **Load unpacked**.
-4. Select the Sankalan project folder.
+Enable **Developer mode**, click **Load unpacked**, and select the Sankalan project folder.
 
----
-
-## Using Sankalan
-
-1. Open a webpage containing structured data.
-2. Click the **Sankalan** extension icon.
-3. Click **Scan Current Page**.
-4. Review the detected page elements.
-5. Choose either:
-   - **Tables**
-   - **Repeated Items**
-6. Select the dataset or repeated group.
-7. Click the extraction button.
-8. Review the data preview.
-9. Export the dataset as CSV, JSON, or XLSX.
-
----
-
-## Local HTML Files
-
-Sankalan can also be tested with local `.html` files.
-
-In Edge:
+For local HTML testing, enable:
 
 ```text
-edge://extensions
-→ Sankalan
-→ Details
-→ Allow access to file URLs
+Allow access to file URLs
 ```
 
-Enable the option before scanning a `file://` page.
+from the extension details page.
 
 ---
 
-## Example Use Cases
+## What I Learned
 
-Sankalan can be useful for collecting raw webpage data for:
+Building Sankalan helped me improve my understanding of:
 
-- data analysis projects
-- exploratory data analysis
-- machine learning datasets
-- price comparisons
-- research datasets
-- product listings
-- movie datasets
-- book datasets
-- public information tables
-- quote collections
-- website structure experiments
+- Browser extension development
+- JavaScript DOM manipulation
+- HTML structure analysis
+- Webpage data extraction
+- Dynamic field discovery
+- Repeated pattern detection
+- Semantic field classification
+- HTML table processing
+- CSV and JSON generation
+- Excel workbook generation
+- SheetJS
+- Raw-data preservation
+- Debugging dynamic webpages
+- Data acquisition workflows
 
----
+Most importantly, this project helped me connect **web development with Data Analytics**.
 
-## Tested Extraction Scenarios
+Instead of always asking:
 
-During development, Sankalan has been tested against several different webpage structures, including:
+> “Where can I download a dataset?”
 
-- book listing cards
-- movie ranking/listing pages
-- quote cards with authors and tags
-- Wikipedia-style tables and infoboxes
-- custom HTML tables with `rowspan`
-- product-style repeated layouts
+I started asking:
 
-Because websites frequently change their frontend structure, extraction quality can vary between pages and over time.
+> “Can I collect the data I need directly from the source?”
+
+That question became the main idea behind Sankalan.
 
 ---
 
 ## Current Limitations
 
-Sankalan is still under active development.
+Websites do not follow one universal HTML structure.
 
-Some modern websites use:
+Some modern websites:
 
-- client-side rendering
-- virtualized lists
-- lazy-loaded cards
-- frequently changing CSS classes
-- dynamically replaced DOM nodes
-- anti-automation techniques
+- Load data dynamically
+- Replace DOM elements while scrolling
+- Use virtualized lists
+- Render content using JavaScript
+- Require authentication
+- Use infinite scrolling
+- Change their HTML structure over time
 
-These behaviors can make repeated-record extraction more difficult than traditional static HTML extraction.
+Because of this, Sankalan may not extract every webpage perfectly.
 
-Sankalan does not attempt to bypass authentication, paywalls, CAPTCHAs, anti-bot protections, or access controls.
-
----
-
-## Privacy
-
-Sankalan performs extraction from the webpage currently open in the browser.
-
-The extension does not require a remote backend for its normal extraction workflow. Exported files are created locally through the browser download system.
-
-Always make sure you have permission to collect and use data from a website and follow the website's terms and applicable rules.
-
----
-
-## Technology
-
-- HTML
-- CSS
-- JavaScript
-- Chrome Extension APIs
-- Manifest V3
-- SheetJS / XLSX
-
----
-
-## Permissions
-
-Sankalan currently requests:
-
-```text
-activeTab
-scripting
-downloads
-```
-
-They are used to:
-
-- inspect the active webpage after user interaction
-- inject the extraction modules
-- export generated datasets
-
----
-
-## Development
-
-Clone the repository:
-
-```bash
-git clone https://github.com/dineshsinghdhami/sankalan-web-data-extractor-extension.git
-cd sankalan-web-data-extractor-extension
-```
-
-Install the JavaScript dependency if needed:
-
-```bash
-npm install
-```
-
-After modifying extension files:
-
-```text
-edge://extensions
-→ Sankalan
-→ Reload
-```
-
-Then refresh the webpage being tested.
-
----
-
-## Roadmap
-
-Planned improvements include:
-
-- stronger extraction on heavily dynamic websites
-- better automatic repeated-group ranking
-- improved semantic field naming
-- additional duplicate-field detection
-- reusable extractor utilities
-- cleaner modular separation of popup logic
-- broader regression testing
-- browser store packaging
-
----
-
-## Version
-
-Current extension version:
-
-```text
-0.2.0
-```
-
----
-
-## Repository
-
-GitHub:
-
-```text
-https://github.com/dineshsinghdhami/sankalan-web-data-extractor-extension
-```
-
-Issues:
-
-```text
-https://github.com/dineshsinghdhami/sankalan-web-data-extractor-extension/issues
-```
-
----
-
-## Author
-
-**Dinesh Singh Dhami**
-
-GitHub: [@dineshsinghdhami](https://github.com/dineshsinghdhami)
+The project focuses on **generic DOM and semantic detection** instead of hardcoding support for specific websites.
 
 ---
 
 ## Project Status
 
-Sankalan is currently an actively developed browser-extension project.
+Current version:
 
-The extension is usable locally through **Load unpacked** while compatibility and extraction behavior continue to improve across different webpage structures.
+```text
+v0.2
+```
+
+Sankalan is currently under active development.
+
+Support for highly dynamic webpages and more complex record structures will continue to improve.
 
 ---
 
-> **Sankalan — Collect first. Analyze later.**
+## Future Improvements
+
+- Better support for dynamically rendered websites
+- Improved repeated-record detection
+- Smarter semantic field discovery
+- Automatic pagination
+- Multi-page extraction
+- Infinite-scroll support
+- Dataset filtering before export
+- Better duplicate detection
+- Improved JavaScript-rendered content support
+- Browser-store publishing
+- More real-world website testing
+
+---
+
+## License
+
+This project is **proprietary**, with **all rights reserved**.
+
+Reuse, modification, redistribution, publishing, or hosting requires prior written permission. See [LICENSE.md](LICENSE.md) for details.
+
+The Sankalan project is publicly visible for **demonstration, evaluation, learning, and portfolio purposes**, not for unrestricted reuse.
+
+Do not assume that publicly accessible source code is free to copy, modify, republish, redistribute, or include in another project.
+
+If you wish to use any original part of this project, **request permission first**.
+
+Third-party libraries and dependencies retain their respective licenses.
+
+---
+
+## Contributions
+
+Public contributions are not currently accepted.
+
+For collaboration, educational discussion, Data Analytics ideas, or licensing inquiries, feel free to contact me.
+
+---
+
+## Project Owner
+
+**Dinesh Singh Dhami**
+
+- **Website:** [dineshsinghdhami.com.np](https://dineshsinghdhami.com.np/)
+- **GitHub:** [dineshsinghdhami](https://github.com/dineshsinghdhami)
+- **LinkedIn:** [dineshsinghdhami2](https://www.linkedin.com/in/dineshsinghdhami2/)
+- **Email:** [dineshdhamidn@gmail.com](mailto:dineshdhamidn@gmail.com)

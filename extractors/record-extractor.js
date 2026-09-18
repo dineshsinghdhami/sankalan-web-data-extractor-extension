@@ -29,9 +29,16 @@
     }
 
 
+    const preparedFields =
+      prepareSemanticFields(
+        items,
+        fields
+      );
+
+
     let selectedFields =
       selectBestSemanticFields(
-        fields
+        preparedFields
       );
 
 
@@ -140,18 +147,6 @@
       );
 
 
-    /*
-      Remove fields that are completely empty
-      across every extracted record.
-
-      Example:
-      Link 2 may be discovered structurally,
-      but after URL deduplication every row may
-      contain an empty value.
-
-      Such a column should not be exported.
-    */
-
     const cleaned =
       removeCompletelyEmptyColumns(
         headers,
@@ -173,13 +168,6 @@
     };
 
   }
-
-
-  /*
-    ==================================================
-    REMOVE EMPTY COLUMNS
-    ==================================================
-  */
 
 
   function removeCompletelyEmptyColumns(
@@ -273,13 +261,6 @@
     };
 
   }
-
-
-  /*
-    ==================================================
-    REMOVE GENERIC NUMBER IF IT DUPLICATES RATING
-    ==================================================
-  */
 
 
   function removeRatingDuplicateNumberFields(
@@ -429,13 +410,6 @@
     );
 
   }
-
-
-  /*
-    ==================================================
-    SEMANTIC VALUE VALIDATION
-    ==================================================
-  */
 
 
   function validateSemanticValue(
@@ -626,13 +600,6 @@
   }
 
 
-  /*
-    ==================================================
-    IDENTITY NORMALIZATION
-    ==================================================
-  */
-
-
   function cleanIdentityValue(
     value
   ) {
@@ -656,16 +623,6 @@
       /^open\s+(?:details\s+)?(?:about|for)\s+/i,
 
       /^read\s+more\s+about\s+/i,
-
-      /*
-        IMDb-style accessibility label:
-
-        View title page for The Shawshank Redemption
-        → The Shawshank Redemption
-
-        This is generic because it is based on
-        language structure, not hostname/classes.
-      */
 
       /^view\s+title\s+page\s+for\s+/i,
 
@@ -737,13 +694,6 @@
       .test(name);
 
   }
-
-
-  /*
-    ==================================================
-    FIELD VALIDATORS
-    ==================================================
-  */
 
 
   function isValidDiscount(
@@ -851,11 +801,1165 @@
   }
 
 
-  /*
-    ==================================================
-    SEMANTIC FIELD MERGING
-    ==================================================
-  */
+  function prepareSemanticFields(
+    items,
+    fields
+  ) {
+
+    let prepared =
+      fields.map(
+        function (field) {
+
+          const clone = {
+            ...field
+          };
+
+
+          if (
+            isIdentityFieldName(
+              normalizeFieldName(
+                clone.name
+              )
+            ) &&
+            valuesLookLikeQuotes(
+              clone.examples
+            )
+          ) {
+
+            clone.name =
+              "Quote";
+
+            clone.type =
+              "text";
+
+          }
+
+
+          return clone;
+
+        }
+      );
+
+
+    prepared =
+      prepared.filter(
+        function (field) {
+
+          return !isStandaloneConnectorField(
+            field
+          );
+
+        }
+      );
+
+
+    prepared =
+      prepared.filter(
+        function (field) {
+
+          return !isGenericRelationshipIdentityField(
+            field
+          );
+
+        }
+      );
+
+
+    const relationshipData =
+      analyzeSemanticRelationships(
+        items
+      );
+
+
+    if (
+      relationshipData.hasTags
+    ) {
+
+      prepared =
+        prepared.filter(
+          function (field) {
+
+            return !isDuplicateTagIdentityField(
+              field,
+              items
+            );
+
+          }
+        );
+
+    }
+
+
+    if (
+      relationshipData.hasTags
+    ) {
+
+      prepared =
+        prepared.filter(
+          function (field) {
+
+            return !fieldLooksLikeTagLink(
+              field
+            );
+
+          }
+        );
+
+
+      prepared.push({
+        id:
+          "semantic_tags",
+        name:
+          "Tags",
+        path:
+          "@semantic:tags",
+        type:
+          "text",
+        presence:
+          relationshipData.tagPresence,
+        score:
+          240,
+        examples:
+          relationshipData.tagExamples
+      });
+
+    }
+
+
+    if (
+      relationshipData.hasAuthor
+    ) {
+
+      prepared =
+        prepared.filter(
+          function (field) {
+
+            const name =
+              normalizeFieldName(
+                field.name
+              );
+
+
+            return (
+              name !== "author" &&
+              !fieldLooksLikeAuthorText(
+                field
+              )
+            );
+
+          }
+        );
+
+
+      prepared.push({
+        id:
+          "semantic_author",
+        name:
+          "Author",
+        path:
+          "@semantic:author",
+        type:
+          "text",
+        presence:
+          relationshipData.authorPresence,
+        score:
+          250,
+        examples:
+          relationshipData.authorExamples
+      });
+
+    }
+
+
+    if (
+      relationshipData.hasAuthorLink
+    ) {
+
+      prepared =
+        prepared.filter(
+          function (field) {
+
+            return !fieldLooksLikeAuthorLink(
+              field
+            );
+
+          }
+        );
+
+
+      prepared.push({
+        id:
+          "semantic_author_link",
+        name:
+          "Author Link",
+        path:
+          "@semantic:author-link",
+        type:
+          "url",
+        presence:
+          relationshipData.authorLinkPresence,
+        score:
+          190,
+        examples:
+          relationshipData.authorLinkExamples
+      });
+
+    }
+
+
+    return prepared;
+
+  }
+
+
+  function analyzeSemanticRelationships(
+    items
+  ) {
+
+    const authors = [];
+    const authorLinks = [];
+    const tags = [];
+
+
+    let authorCount = 0;
+    let authorLinkCount = 0;
+    let tagCount = 0;
+
+
+    items.forEach(
+      function (item) {
+
+        const author =
+          extractSemanticAuthor(
+            item
+          );
+
+
+        const authorLink =
+          extractSemanticAuthorLink(
+            item
+          );
+
+
+        const tagValue =
+          extractSemanticTags(
+            item
+          );
+
+
+        if (author) {
+
+          authorCount++;
+
+          authors.push(
+            author
+          );
+
+        }
+
+
+        if (authorLink) {
+
+          authorLinkCount++;
+
+          authorLinks.push(
+            authorLink
+          );
+
+        }
+
+
+        if (tagValue) {
+
+          tagCount++;
+
+          tags.push(
+            tagValue
+          );
+
+        }
+
+      }
+    );
+
+
+    const minimum =
+      Math.max(
+        2,
+        Math.ceil(
+          items.length *
+          0.15
+        )
+      );
+
+
+    return {
+
+      hasAuthor:
+        authorCount >=
+        minimum,
+
+      hasAuthorLink:
+        authorLinkCount >=
+        minimum,
+
+      hasTags:
+        tagCount >=
+        minimum,
+
+      authorPresence:
+        Math.round(
+          authorCount /
+          items.length *
+          100
+        ),
+
+      authorLinkPresence:
+        Math.round(
+          authorLinkCount /
+          items.length *
+          100
+        ),
+
+      tagPresence:
+        Math.round(
+          tagCount /
+          items.length *
+          100
+        ),
+
+      authorExamples:
+        uniqueExamples(
+          authors
+        ),
+
+      authorLinkExamples:
+        uniqueExamples(
+          authorLinks
+        ),
+
+      tagExamples:
+        uniqueExamples(
+          tags
+        )
+
+    };
+
+  }
+
+
+  function uniqueExamples(
+    values
+  ) {
+
+    return Array.from(
+      new Set(
+        values
+          .map(
+            normalizeValue
+          )
+          .filter(
+            Boolean
+          )
+      )
+    )
+      .slice(
+        0,
+        3
+      );
+
+  }
+
+
+  function valuesLookLikeQuotes(
+    values
+  ) {
+
+    if (
+      !Array.isArray(
+        values
+      )
+    ) {
+      return false;
+    }
+
+
+    const sample =
+      values
+        .map(
+          normalizeValue
+        )
+        .filter(
+          Boolean
+        )
+        .slice(
+          0,
+          30
+        );
+
+
+    if (
+      sample.length <
+      2
+    ) {
+      return false;
+    }
+
+
+    const matches =
+      sample.filter(
+        function (value) {
+
+          return /^(?:[“"'‘]).{12,}(?:[”"'’])$/s
+            .test(
+              value
+            );
+
+        }
+      ).length;
+
+
+    return (
+      matches /
+      sample.length
+    ) >= 0.6;
+
+  }
+
+
+  function isStandaloneConnectorField(
+    field
+  ) {
+
+    const examples =
+      Array.isArray(
+        field.examples
+      )
+        ? field.examples
+            .map(
+              normalizeValue
+            )
+            .filter(
+              Boolean
+            )
+        : [];
+
+
+    if (
+      examples.length ===
+      0
+    ) {
+      return false;
+    }
+
+
+    const connectors =
+      new Set([
+        "by",
+        "by:",
+        "from",
+        "from:",
+        "via",
+        "via:",
+        "at",
+        "at:",
+        "of",
+        "of:",
+        "for",
+        "for:"
+      ]);
+
+
+    return examples.every(
+      function (value) {
+
+        return connectors.has(
+          value.toLowerCase()
+        );
+
+      }
+    );
+
+  }
+
+
+  function isGenericRelationshipIdentityField(
+    field
+  ) {
+
+    const name =
+      normalizeFieldName(
+        field.name
+      );
+
+
+    if (
+      !isIdentityFieldName(
+        name
+      )
+    ) {
+      return false;
+    }
+
+
+    const examples =
+      Array.isArray(
+        field.examples
+      )
+        ? field.examples
+            .map(
+              normalizeValue
+            )
+            .filter(
+              Boolean
+            )
+        : [];
+
+
+    if (
+      !examples.length
+    ) {
+      return false;
+    }
+
+
+    return examples.every(
+      function (value) {
+
+        return isGenericRelationshipLabel(
+          value
+        );
+
+      }
+    );
+
+  }
+
+
+  function isDuplicateTagIdentityField(
+    field,
+    items
+  ) {
+
+    const name =
+      normalizeFieldName(
+        field.name
+      );
+
+
+    if (
+      !isIdentityFieldName(
+        name
+      ) ||
+      valuesLookLikeQuotes(
+        field.examples
+      )
+    ) {
+      return false;
+    }
+
+
+    const examples =
+      Array.isArray(
+        field.examples
+      )
+        ? field.examples
+            .map(
+              normalizeValue
+            )
+            .filter(
+              Boolean
+            )
+        : [];
+
+
+    if (
+      !examples.length
+    ) {
+      return false;
+    }
+
+
+    const tagValues =
+      new Set();
+
+
+    items.forEach(
+      function (item) {
+
+        extractSemanticTags(
+          item
+        )
+          .split(
+            ","
+          )
+          .map(
+            normalizeValue
+          )
+          .filter(
+            Boolean
+          )
+          .forEach(
+            function (tag) {
+
+              tagValues.add(
+                tag.toLowerCase()
+              );
+
+            }
+          );
+
+      }
+    );
+
+
+    if (
+      !tagValues.size
+    ) {
+      return false;
+    }
+
+
+    const covered =
+      examples.filter(
+        function (value) {
+
+          return tagValues.has(
+            value.toLowerCase()
+          );
+
+        }
+      ).length;
+
+
+    if (
+      covered /
+      examples.length >=
+      0.8
+    ) {
+      return true;
+    }
+
+
+    return /(?:^|[\s>._:-])(?:tags?|keywords?)(?:$|[\s>._:-])/i
+      .test(
+        String(
+          field.path ||
+          ""
+        )
+      );
+
+  }
+
+
+  function fieldLooksLikeAuthorText(
+    field
+  ) {
+
+    return /author|byline/i
+      .test(
+        String(
+          field.path ||
+          ""
+        )
+      );
+
+  }
+
+
+  function fieldLooksLikeAuthorLink(
+    field
+  ) {
+
+    if (
+      field.type !==
+      "url"
+    ) {
+      return false;
+    }
+
+
+    const examples =
+      Array.isArray(
+        field.examples
+      )
+        ? field.examples
+            .map(
+              normalizeValue
+            )
+            .filter(
+              Boolean
+            )
+        : [];
+
+
+    if (
+      !examples.length
+    ) {
+      return false;
+    }
+
+
+    return (
+      examples.filter(
+        isAuthorLikeURL
+      ).length /
+      examples.length
+    ) >= 0.6;
+
+  }
+
+
+  function fieldLooksLikeTagLink(
+    field
+  ) {
+
+    if (
+      field.type !==
+      "url"
+    ) {
+      return false;
+    }
+
+
+    const examples =
+      Array.isArray(
+        field.examples
+      )
+        ? field.examples
+            .map(
+              normalizeValue
+            )
+            .filter(
+              Boolean
+            )
+        : [];
+
+
+    if (
+      !examples.length
+    ) {
+      return false;
+    }
+
+
+    return (
+      examples.filter(
+        isTagLikeURL
+      ).length /
+      examples.length
+    ) >= 0.6;
+
+  }
+
+
+  function isAuthorLikeURL(
+    value
+  ) {
+
+    return /(?:^|\/)(?:authors?|writers?|byline)(?:\/|$)/i
+      .test(
+        String(
+          value ||
+          ""
+        )
+      );
+
+  }
+
+
+  function isTagLikeURL(
+    value
+  ) {
+
+    return /(?:^|\/)(?:tags?|keywords?)(?:\/|$)/i
+      .test(
+        String(
+          value ||
+          ""
+        )
+      );
+
+  }
+
+
+  function extractSemanticAuthor(
+    item
+  ) {
+
+    const semanticElement =
+      item.querySelector(
+        "[class*='author' i], [class*='byline' i], [rel='author'], [itemprop='author']"
+      );
+
+
+    if (
+      semanticElement
+    ) {
+
+      const semanticText =
+        normalizeValue(
+          semanticElement.textContent
+        );
+
+
+      if (
+        semanticText &&
+        !isGenericRelationshipLabel(
+          semanticText
+        )
+      ) {
+
+        return semanticText;
+
+      }
+
+    }
+
+
+    const links =
+      collectLinkElements(
+        item
+      );
+
+
+    for (
+      const link
+      of links
+    ) {
+
+      if (
+        !isAuthorLikeLink(
+          link
+        )
+      ) {
+        continue;
+      }
+
+
+      const text =
+        normalizeValue(
+          link.textContent
+        );
+
+
+      if (
+        text &&
+        !isGenericRelationshipLabel(
+          text
+        )
+      ) {
+
+        return text;
+
+      }
+
+    }
+
+
+    return "";
+
+  }
+
+
+  function isGenericRelationshipLabel(
+    value
+  ) {
+
+    const text =
+      normalizeValue(
+        value
+      )
+        .toLowerCase()
+        .replace(
+          /^[\(\[\{]+|[\)\]\}]+$/g,
+          ""
+        )
+        .trim();
+
+
+    return new Set([
+      "about",
+      "profile",
+      "details",
+      "view",
+      "more",
+      "info",
+      "information",
+      "author",
+      "writer"
+    ])
+      .has(
+        text
+      );
+
+  }
+
+
+  function extractSemanticAuthorLink(
+    item
+  ) {
+
+    const links =
+      collectLinkElements(
+        item
+      );
+
+
+    for (
+      const link
+      of links
+    ) {
+
+      if (
+        !isAuthorLikeLink(
+          link
+        )
+      ) {
+        continue;
+      }
+
+
+      const href =
+        normalizeURL(
+          link.href ||
+          link.getAttribute(
+            "href"
+          )
+        );
+
+
+      if (href) {
+        return href;
+      }
+
+    }
+
+
+    return "";
+
+  }
+
+
+  function extractSemanticTags(
+    item
+  ) {
+
+    const values =
+      [];
+
+    const seen =
+      new Set();
+
+
+    collectLinkElements(
+      item
+    )
+      .forEach(
+        function (link) {
+
+          if (
+            !isTagLikeLink(
+              link
+            )
+          ) {
+            return;
+          }
+
+
+          const text =
+            normalizeValue(
+              link.textContent
+            );
+
+
+          const key =
+            text.toLowerCase();
+
+
+          if (
+            !text ||
+            seen.has(
+              key
+            )
+          ) {
+            return;
+          }
+
+
+          seen.add(
+            key
+          );
+
+
+          values.push(
+            text
+          );
+
+        }
+      );
+
+
+    return values.join(
+      ", "
+    );
+
+  }
+
+
+  function collectLinkElements(
+    item
+  ) {
+
+    const links =
+      [];
+
+
+    if (
+      item.matches(
+        "a[href]"
+      )
+    ) {
+
+      links.push(
+        item
+      );
+
+    }
+
+
+    item
+      .querySelectorAll(
+        "a[href]"
+      )
+      .forEach(
+        function (link) {
+
+          links.push(
+            link
+          );
+
+        }
+      );
+
+
+    return links;
+
+  }
+
+
+  function isAuthorLikeLink(
+    link
+  ) {
+
+    return /(?:^|[\s/_-])(?:authors?|writers?|byline)(?:$|[\s/_-])/i
+      .test(
+        buildRelationshipDescriptor(
+          link
+        )
+      );
+
+  }
+
+
+  function isTagLikeLink(
+    link
+  ) {
+
+    return /(?:^|[\s/_-])(?:tags?|keywords?)(?:$|[\s/_-])/i
+      .test(
+        buildRelationshipDescriptor(
+          link
+        )
+      );
+
+  }
+
+
+  function buildRelationshipDescriptor(
+    element
+  ) {
+
+    return [
+
+      normalizeURL(
+        element.href ||
+        element.getAttribute(
+          "href"
+        )
+      ),
+
+      getRelationshipClassName(
+        element
+      ),
+
+      element.id ||
+      "",
+
+      element.getAttribute(
+        "rel"
+      ) ||
+      "",
+
+      element.getAttribute(
+        "itemprop"
+      ) ||
+      "",
+
+      element.getAttribute(
+        "aria-label"
+      ) ||
+      "",
+
+      element.getAttribute(
+        "title"
+      ) ||
+      ""
+
+    ]
+      .filter(
+        Boolean
+      )
+      .join(
+        " "
+      )
+      .toLowerCase();
+
+  }
+
+
+  function getRelationshipClassName(
+    element
+  ) {
+
+    if (
+      typeof element.className ===
+      "string"
+    ) {
+
+      return element.className;
+
+    }
+
+
+    if (
+      element.className &&
+      element.className.baseVal
+    ) {
+
+      return element.className.baseVal;
+
+    }
+
+
+    return (
+      element.getAttribute(
+        "class"
+      ) ||
+      ""
+    );
+
+  }
 
 
   function selectBestSemanticFields(
@@ -929,7 +2033,8 @@
       function (group) {
 
         if (
-          group.length === 1
+          group.length ===
+          1
         ) {
 
           selected.push(
@@ -977,7 +2082,9 @@
 
 
         const winner =
-          [...group]
+          [
+            ...group
+          ]
             .sort(
               function (
                 a,
@@ -1095,6 +2202,12 @@
 
       "job title",
 
+      "quote",
+
+      "tags",
+
+      "author link",
+
       "price",
       "current price",
       "original price",
@@ -1138,7 +2251,9 @@
       "action"
 
     ])
-      .has(name);
+      .has(
+        name
+      );
 
   }
 
@@ -1174,8 +2289,10 @@
           fieldName
         )
     ) {
+
       score +=
         40;
+
     }
 
 
@@ -1188,7 +2305,8 @@
 
 
     if (
-      examples.length === 0
+      examples.length ===
+      0
     ) {
       return score;
     }
@@ -1256,7 +2374,8 @@
 
 
     if (
-      usefulCount > 0
+      usefulCount >
+      0
     ) {
 
       score +=
@@ -1291,16 +2410,24 @@
 
     return (
       /^see\s+more\s+information\s+about\s+/i
-        .test(value) ||
+        .test(
+          value
+        ) ||
 
       /^mark\s+.+\s+as\s+(?:watched|read|seen|saved)/i
-        .test(value) ||
+        .test(
+          value
+        ) ||
 
       /^view\s+(?:more\s+)?(?:information|details)/i
-        .test(value) ||
+        .test(
+          value
+        ) ||
 
       /^view\s+title\s+page\s+for\s+/i
-        .test(value)
+        .test(
+          value
+        )
     );
 
   }
@@ -1312,9 +2439,13 @@
 
     return (
       /\.\.\./
-        .test(value) ||
+        .test(
+          value
+        ) ||
       /…/
-        .test(value)
+        .test(
+          value
+        )
     );
 
   }
@@ -1347,13 +2478,6 @@
     );
 
   }
-
-
-  /*
-    ==================================================
-    RECORD MAP
-    ==================================================
-  */
 
 
   function buildRecordMap(
@@ -1404,7 +2528,8 @@
   ) {
 
     if (
-      depth > 8
+      depth >
+      8
     ) {
       return;
     }
@@ -1701,9 +2826,10 @@
 
 
     if (
-      candidate === visible ||
+      candidate ===
+      visible ||
       candidate.length <=
-        visible.length
+      visible.length
     ) {
       return false;
     }
@@ -1731,7 +2857,8 @@
 
 
       if (
-        prefix.length >= 3 &&
+        prefix.length >=
+        3 &&
         candidateNormalized
           .startsWith(
             prefix
@@ -1759,7 +2886,8 @@
 
 
       if (
-        prefix.length >= 3 &&
+        prefix.length >=
+        3 &&
         candidateNormalized
           .startsWith(
             prefix
@@ -1786,13 +2914,6 @@
     );
 
   }
-
-
-  /*
-    ==================================================
-    FIELD EXTRACTION
-    ==================================================
-  */
 
 
   function extractFieldValue(
@@ -1881,6 +3002,42 @@
     }
 
 
+    if (
+      field.path ===
+      "@semantic:author"
+    ) {
+
+      return extractSemanticAuthor(
+        item
+      );
+
+    }
+
+
+    if (
+      field.path ===
+      "@semantic:tags"
+    ) {
+
+      return extractSemanticTags(
+        item
+      );
+
+    }
+
+
+    if (
+      field.path ===
+      "@semantic:author-link"
+    ) {
+
+      return extractSemanticAuthorLink(
+        item
+      );
+
+    }
+
+
     const direct =
       recordMap.get(
         field.path
@@ -1945,8 +3102,10 @@
 
 
         if (
-          score > bestScore &&
-          score >= 0.75
+          score >
+          bestScore &&
+          score >=
+          0.75
         ) {
 
           bestScore =
@@ -1994,7 +3153,8 @@
 
 
     if (
-      maxLength === 0
+      maxLength ===
+      0
     ) {
       return 0;
     }
@@ -2066,13 +3226,6 @@
       .trim();
 
   }
-
-
-  /*
-    ==================================================
-    LINKS
-    ==================================================
-  */
 
 
   function addLinkFields(
@@ -2281,7 +3434,9 @@
                 key.toLowerCase()
               ) ||
               /^ref_/i
-                .test(key)
+                .test(
+                  key
+                )
             ) {
 
               url.searchParams.delete(
@@ -2320,13 +3475,6 @@
     }
 
   }
-
-
-  /*
-    ==================================================
-    IMAGES
-    ==================================================
-  */
 
 
   function addImageFields(
@@ -2523,13 +3671,6 @@
   }
 
 
-  /*
-    ==================================================
-    HEADERS
-    ==================================================
-  */
-
-
   function makeUniqueHeaders(
     fields
   ) {
@@ -2597,7 +3738,8 @@
 
 
         if (
-          count === 0
+          count ===
+          0
         ) {
           return base;
         }
@@ -2633,13 +3775,6 @@
       .trim();
 
   }
-
-
-  /*
-    ==================================================
-    ELEMENTS
-    ==================================================
-  */
 
 
   function shouldIgnoreElement(
@@ -2699,7 +3834,8 @@
 
 
     return (
-      children.length <= 5
+      children.length <=
+      5
     );
 
   }
@@ -2744,7 +3880,8 @@
 
 
     if (
-      element.children.length <= 1
+      element.children.length <=
+      1
     ) {
 
       return normalizeValue(
@@ -2778,7 +3915,8 @@
           function (className) {
 
             return (
-              className.length <= 60 &&
+              className.length <=
+                60 &&
               !/\d{5,}/
                 .test(
                   className
@@ -2836,20 +3974,15 @@
   }
 
 
-  /*
-    ==================================================
-    HELPERS
-    ==================================================
-  */
-
-
   function normalizeValue(
     value
   ) {
 
     if (
-      value === null ||
-      value === undefined
+      value ===
+        null ||
+      value ===
+        undefined
     ) {
       return "";
     }
@@ -2989,7 +4122,8 @@
   ) {
 
     if (
-      value.length > 1000
+      value.length >
+      1000
     ) {
       return true;
     }
@@ -3022,7 +4156,8 @@
 
 
     return (
-      matches >= 2
+      matches >=
+      2
     );
 
   }

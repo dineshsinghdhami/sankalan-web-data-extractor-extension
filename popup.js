@@ -4376,7 +4376,6 @@ function extractSelectedTable(
   ==================================================
 */
 
-
 async function extractDynamicRepeatedGroup(
   group
 ) {
@@ -4466,10 +4465,8 @@ async function extractDynamicRepeatedGroup(
 
 
     if (
-      style.display ===
-        "none" ||
-      style.visibility ===
-        "hidden"
+      style.display === "none" ||
+      style.visibility === "hidden"
     ) {
 
       return false;
@@ -4521,6 +4518,35 @@ async function extractDynamicRepeatedGroup(
   }
 
 
+  /*
+    IMPORTANT:
+
+    Do not use items.slice() here.
+
+    Dynamic websites can mutate the SAME DOM nodes
+    while Sankalan scrolls.
+
+    cloneNode(true) preserves a frozen copy of each
+    detected record before the page can replace or
+    alter its contents.
+  */
+
+  const originalItems =
+    items;
+
+
+  const snapshotItems =
+    items.map(
+      function (item) {
+
+        return item.cloneNode(
+          true
+        );
+
+      }
+    );
+
+
   const originalX =
     window.scrollX;
 
@@ -4533,11 +4559,11 @@ async function extractDynamicRepeatedGroup(
 
 
   if (
-    items.length <= 60
+    originalItems.length <= 60
   ) {
 
     scrollTargets.push(
-      ...items
+      ...originalItems
     );
 
   } else {
@@ -4557,19 +4583,17 @@ async function extractDynamicRepeatedGroup(
           (
             index /
             (
-              steps -
-              1
+              steps - 1
             )
           ) *
           (
-            items.length -
-            1
+            originalItems.length - 1
           )
         );
 
 
       scrollTargets.push(
-        items[
+        originalItems[
           position
         ]
       );
@@ -4607,7 +4631,7 @@ async function extractDynamicRepeatedGroup(
 
     } catch (error) {
 
-      // Ignore scroll failures.
+      // Ignore individual scroll failures.
 
     }
 
@@ -4620,26 +4644,150 @@ async function extractDynamicRepeatedGroup(
   );
 
 
-  items =
-    Array.from(
-      parent.children
-    )
-      .filter(
-        function (child) {
+  await new Promise(
+    function (resolve) {
 
-          return (
-            isVisible(
-              child
-            ) &&
-            createSignature(
-              child
-            ) ===
-              group.signature
-          );
-
-        }
+      setTimeout(
+        resolve,
+        80
       );
 
+    }
+  );
+
+
+  const refreshedParent =
+    document.querySelector(
+      group.parentPath
+    );
+
+
+  const refreshedItems =
+    refreshedParent
+      ? Array.from(
+          refreshedParent.children
+        )
+          .filter(
+            function (child) {
+
+              return (
+                isVisible(
+                  child
+                ) &&
+                createSignature(
+                  child
+                ) ===
+                  group.signature
+              );
+
+            }
+          )
+      : [];
+
+
+  function calculateItemSetRichness(
+    candidateItems
+  ) {
+
+    return candidateItems.reduce(
+      function (
+        total,
+        item
+      ) {
+
+        const textLength =
+          String(
+            item.innerText ||
+            item.textContent ||
+            ""
+          )
+            .replace(
+              /\s+/g,
+              " "
+            )
+            .trim()
+            .length;
+
+
+        const linkCount =
+          item.querySelectorAll(
+            "a[href]"
+          ).length +
+          (
+            item.matches(
+              "a[href]"
+            )
+              ? 1
+              : 0
+          );
+
+
+        const imageCount =
+          item.querySelectorAll(
+            "img"
+          ).length +
+          (
+            item.matches(
+              "img"
+            )
+              ? 1
+              : 0
+          );
+
+
+        return (
+          total +
+          textLength +
+          linkCount * 40 +
+          imageCount * 40
+        );
+
+      },
+      0
+    );
+
+  }
+
+
+  const refreshedRichness =
+    calculateItemSetRichness(
+      refreshedItems
+    );
+
+
+  const snapshotRichness =
+    calculateItemSetRichness(
+      snapshotItems
+    );
+
+
+  /*
+    Try the current live DOM first only when
+    it still contains useful record data.
+
+    Otherwise use the frozen pre-scroll copies.
+  */
+
+  if (
+    refreshedItems.length > 0 &&
+    refreshedRichness >=
+      snapshotRichness * 0.65
+  ) {
+
+    items =
+      refreshedItems;
+
+  } else {
+
+    items =
+      snapshotItems;
+
+  }
+
+
+  /*
+    DISCOVERY PASS 1
+  */
 
   let fields =
     globalThis.Sankalan
@@ -4649,29 +4797,95 @@ async function extractDynamicRepeatedGroup(
       );
 
 
+  /*
+    DISCOVERY PASS 2
+
+    If the live DOM failed, always retry against
+    the frozen pre-scroll product-card snapshots.
+  */
+
+  if (
+    fields.length === 0 &&
+    snapshotItems.length > 0
+  ) {
+
+    items =
+      snapshotItems;
+
+
+    fields =
+      globalThis.Sankalan
+        .fieldDiscovery
+        .discover(
+          snapshotItems
+        );
+
+  }
+
+
+  /*
+    If field discovery still produces nothing,
+    return the exact reason instead of allowing
+    the popup to show a vague generic error.
+  */
+
+  if (
+    fields.length === 0
+  ) {
+
+    throw new Error(
+      "Diagnostic: " +
+      items.length +
+      " repeated items were found, but field discovery returned 0 fields. " +
+      "Snapshot richness: " +
+      snapshotRichness +
+      ". Refreshed richness: " +
+      refreshedRichness +
+      "."
+    );
+
+  }
+
+
   const ratingResults =
     items.map(
       function (item) {
 
-        const result =
-          globalThis.Sankalan
-            .ratingExtractor
-            .extract(
-              item
-            );
+        try {
+
+          const result =
+            globalThis.Sankalan
+              .ratingExtractor
+              .extract(
+                item
+              );
 
 
-        return {
+          return {
 
-          rating:
-            result?.rating ||
-            "",
+            rating:
+              result?.rating ||
+              "",
 
-          reviews:
-            result?.reviews ||
-            ""
+            reviews:
+              result?.reviews ||
+              ""
 
-        };
+          };
+
+        } catch (error) {
+
+          return {
+
+            rating:
+              "",
+
+            reviews:
+              ""
+
+          };
+
+        }
 
       }
     );
@@ -4690,7 +4904,10 @@ async function extractDynamicRepeatedGroup(
         }
       )
       .length /
-    items.length;
+    Math.max(
+      items.length,
+      1
+    );
 
 
   const reviewsPresence =
@@ -4706,7 +4923,10 @@ async function extractDynamicRepeatedGroup(
         }
       )
       .length /
-    items.length;
+    Math.max(
+      items.length,
+      1
+    );
 
 
   const hasRating =
@@ -4880,6 +5100,38 @@ async function extractDynamicRepeatedGroup(
       );
 
 
+  if (
+    !extracted ||
+    !Array.isArray(
+      extracted.headers
+    ) ||
+    !Array.isArray(
+      extracted.rows
+    )
+  ) {
+
+    throw new Error(
+      "Diagnostic: record extractor returned an invalid result."
+    );
+
+  }
+
+
+  if (
+    extracted.rows.length === 0
+  ) {
+
+    throw new Error(
+      "Diagnostic: " +
+      items.length +
+      " items and " +
+      fields.length +
+      " fields reached record extraction, but it returned 0 rows."
+    );
+
+  }
+
+
   const ratingIndex =
     extracted.headers
       .findIndex(
@@ -5020,16 +5272,14 @@ async function extractDynamicRepeatedGroup(
 
 
     if (
-      name ===
-      "price"
+      name === "price"
     ) {
       return 10;
     }
 
 
     if (
-      name ===
-      "rating"
+      name === "rating"
     ) {
       return 15;
     }
@@ -5046,24 +5296,21 @@ async function extractDynamicRepeatedGroup(
 
 
     if (
-      name ===
-      "action"
+      name === "action"
     ) {
       return 60;
     }
 
 
     if (
-      field.type ===
-      "url"
+      field.type === "url"
     ) {
       return 90;
     }
 
 
     if (
-      field.type ===
-      "image"
+      field.type === "image"
     ) {
       return 100;
     }

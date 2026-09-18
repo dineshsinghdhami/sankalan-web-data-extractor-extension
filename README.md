@@ -21,7 +21,7 @@ That idea led me to build Sankalan.
 
 Sankalan scans webpages, detects tables and repeated records such as products, books, movies, quotes, listings, and cards, then converts the discovered information into structured datasets.
 
-> **Note:** This project is proprietary. Copying, modification, redistribution, or reuse requires prior written permission. See [LICENSE.md](LICENSE.md).
+I also used **AI tools as development assistants** while building Sankalan for brainstorming, debugging support, code explanations, implementation ideas, and documentation refinement. I reviewed, modified, tested, and integrated the final implementation myself.
 
 ---
 
@@ -155,7 +155,7 @@ browser://extensions
 
 ---
 
-##  # What I Learned
+## # What I Learned
 
 Building Sankalan helped me improve my understanding of:
 
@@ -186,6 +186,8 @@ I started asking:
 
 That question became the main idea behind Sankalan.
 
+I also learned how to use **AI responsibly as a development assistant**. I used AI for brainstorming, understanding errors, debugging ideas, code explanations, and improving documentation, while I reviewed, tested, modified, and integrated the final project myself.
+
 ---
 
 ## # Current Limitations
@@ -208,39 +210,9 @@ The project focuses on **generic DOM and semantic detection** instead of hardcod
 
 ---
 
-## # Project Status
-
-Current version:
-
-```text
-v0.2
-```
-
-Sankalan is currently under active development.
-
-Support for highly dynamic webpages and more complex record structures will continue to improve.
-
----
-
-## # License
-
-This project is **proprietary**, with **all rights reserved**.
-
-Reuse, modification, redistribution, publishing, or hosting requires prior written permission. See [LICENSE.md](LICENSE.md) for details.
-
-The Sankalan project is publicly visible for **demonstration, evaluation, learning, and portfolio purposes**, not for unrestricted reuse.
-
-Do not assume that publicly accessible source code is free to copy, modify, republish, redistribute, or include in another project.
-
-If you wish to use any original part of this project, **request permission first**.
-
-Third-party libraries and dependencies retain their respective licenses.
-
----
-
 ## # Contributions
 
-Public contributions are not currently accepted.
+Public contributions are always accepted.
 
 For collaboration, educational discussion, Data Analytics ideas, or licensing inquiries, feel free to contact me.
 

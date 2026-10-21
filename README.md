@@ -224,5 +224,5 @@ For collaboration, educational discussion, Data Analytics ideas, or licensing in
 
 - **Website:** [dineshsinghdhami.com.np](https://dineshsinghdhami.com.np/)
 - **GitHub:** [dineshsinghdhami](https://github.com/dineshsinghdhami)
-- **LinkedIn:** [dineshsinghdhami1](https://www.linkedin.com/in/dineshsinghdhami1/)
+- **LinkedIn:** [dineshsinghdhami2](https://www.linkedin.com/in/dineshsinghdhami2/)
 - **Email:** [dineshdhamidn@gmail.com](mailto:dineshdhamidn@gmail.com)
